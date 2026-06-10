@@ -5,11 +5,27 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const { spawn } = require('child_process');
 
-// Root to scan for markdown files. Defaults to C:\dev (parent of this app),
-// override with `node server.js <root>` or the MD_ROOT env var.
-const ROOT = path.resolve(process.argv[2] || process.env.MD_ROOT || path.join(__dirname, '..'));
-const PORT = Number(process.env.MD_PORT) || 4321;
+// --- CLI parsing -----------------------------------------------------------
+// Usage: node server.js [root] [--port N] [--no-open]
+const argv = process.argv.slice(2);
+let cliRoot = null;
+let cliPort = null;
+let noOpen = false;
+for (let i = 0; i < argv.length; i++) {
+  const a = argv[i];
+  if (a === '--no-open' || a === '-n') noOpen = true;
+  else if (a === '--port' || a === '-p') cliPort = Number(argv[++i]);
+  else if (a.startsWith('--port=')) cliPort = Number(a.slice(7));
+  else if (!a.startsWith('-')) cliRoot = a; // first positional = root
+}
+
+// Root to scan for markdown files. Defaults to the parent of this app,
+// override with a positional arg or the MD_ROOT env var.
+const ROOT = path.resolve(cliRoot || process.env.MD_ROOT || path.join(__dirname, '..'));
+const PORT = cliPort || Number(process.env.MD_PORT) || 4321;
+const NO_OPEN = noOpen || process.env.MD_NO_OPEN === '1';
 const PUBLIC = path.join(__dirname, 'public');
 
 const IGNORE_DIRS = new Set([
@@ -150,10 +166,36 @@ const server = http.createServer((req, res) => {
   serveStatic(res, fileOnDisk);
 });
 
+// Cross-platform "open this URL in the default browser".
+function openBrowser(target) {
+  try {
+    if (process.platform === 'win32') {
+      // `start` is a cmd builtin; "" is the (empty) window title argument.
+      spawn('cmd', ['/c', 'start', '""', target], { detached: true, stdio: 'ignore' }).unref();
+    } else if (process.platform === 'darwin') {
+      spawn('open', [target], { detached: true, stdio: 'ignore' }).unref();
+    } else {
+      spawn('xdg-open', [target], { detached: true, stdio: 'ignore' }).unref();
+    }
+  } catch { /* abrir el browser es best-effort */ }
+}
+
 server.listen(PORT, () => {
   const link = `http://localhost:${PORT}`;
   console.log('\n  📖  Markdown Reader');
   console.log('  ──────────────────────────────────────────');
   console.log(`  Sirviendo .md desde:  ${ROOT}`);
-  console.log(`  Abrí en el browser:   ${link}\n`);
+  console.log(`  Abierto en:           ${link}`);
+  console.log('  (Ctrl+C para detener)\n');
+  if (!NO_OPEN) openBrowser(link);
+});
+
+// Si el puerto está ocupado, avisar con claridad en vez de un stack trace.
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n  ⚠️  El puerto ${PORT} ya está en uso.`);
+    console.error(`     Probá otro:  node server.js --port ${PORT + 1}\n`);
+    process.exit(1);
+  }
+  throw err;
 });

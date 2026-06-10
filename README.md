@@ -2,32 +2,64 @@
 
 Cliente web local para leer los `.md` generados en las distintas sesiones, renderizados de forma legible: tablas, diagramas **Mermaid**, resaltado de código, tabla de contenidos y estilos personalizables.
 
-No tiene dependencias de npm — sólo necesita **Node.js** (ya instalado) y un browser. Las librerías de frontend (marked, mermaid, highlight.js, DOMPurify) están vendoreadas en `public/vendor/`, así que **funciona offline**.
+No tiene dependencias de npm — sólo necesita **Node.js** (≥ 16) y un browser. Las librerías de frontend (marked, mermaid, highlight.js, DOMPurify) están vendoreadas en `public/vendor/`, así que **funciona offline**.
 
-## Uso rápido
+## Requisito único: Node.js
 
-```powershell
-git clone <tu-repo> md-reader
-cd md-reader
-.\start.ps1            # abre el browser en http://localhost:4321
-```
-
-Por defecto indexa la **carpeta padre** del proyecto. Para leer `.md` de cualquier otra ruta:
-
-```powershell
-.\start.ps1 C:\ruta\a\otra\carpeta
-.\start.ps1 -Port 5000          # cambiar puerto
-```
-
-O directamente con Node / npm (multiplataforma — Windows, macOS, Linux):
+Verificá si ya lo tenés:
 
 ```bash
-npm start                       # = node server.js (raíz = carpeta padre)
-node server.js /ruta/a/docs     # indexar una carpeta puntual
-MD_ROOT=/ruta/a/docs MD_PORT=5000 node server.js
+node --version      # debería imprimir v16 o superior
 ```
 
-> No requiere `npm install`: no tiene dependencias. Las librerías de frontend están en `public/vendor/`.
+Si no aparece, instalá la versión **LTS** desde <https://nodejs.org>. No hace falta nada más: **no se corre `npm install`** porque el proyecto no tiene dependencias.
+
+## Up & running
+
+### 1. Cloná el repo
+
+```bash
+git clone <tu-repo> md-reader
+cd md-reader
+```
+
+### 2. Arrancá (elegí según tu sistema)
+
+**Windows** — doble-clic en `start.cmd`, o desde la terminal:
+
+```powershell
+.\start.cmd                 # cmd
+.\start.ps1                 # PowerShell
+```
+
+**macOS / Linux:**
+
+```bash
+chmod +x start.sh           # sólo la primera vez
+./start.sh
+```
+
+**Cualquier SO (con npm):**
+
+```bash
+npm start
+```
+
+Eso es todo: el servidor arranca y **abre el browser solo** en <http://localhost:4321>. Para detenerlo, `Ctrl+C` en la terminal.
+
+### Opciones
+
+Por defecto indexa la **carpeta padre** del proyecto. Para apuntar a otra carpeta o cambiar el puerto:
+
+| Quiero… | Comando |
+|---|---|
+| Indexar otra carpeta | `node server.js /ruta/a/docs` |
+| Cambiar el puerto | `node server.js --port 5000` |
+| No abrir el browser | `node server.js --no-open` |
+| Vía variables de entorno | `MD_ROOT=/ruta MD_PORT=5000 node server.js` |
+| En Windows con el `.ps1` | `.\start.ps1 C:\ruta -Port 5000` |
+
+> Si el puerto está ocupado, el server lo avisa y sugiere otro.
 
 ## Características
 
@@ -46,8 +78,11 @@ MD_ROOT=/ruta/a/docs MD_PORT=5000 node server.js
 
 ```
 md-reader/
-├─ server.js          # servidor HTTP sin dependencias (índice + lectura de archivos)
-├─ start.ps1          # launcher para Windows
+├─ server.js          # servidor HTTP sin dependencias (índice + lectura + auto-open)
+├─ start.cmd          # launcher Windows (doble-clic / cmd)
+├─ start.ps1          # launcher Windows (PowerShell)
+├─ start.sh           # launcher macOS / Linux
+├─ package.json       # `npm start`
 ├─ public/
 │  ├─ index.html
 │  ├─ style.css

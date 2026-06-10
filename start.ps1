@@ -1,6 +1,8 @@
-# Markdown Reader — launcher
-# Uso:  .\start.ps1            (sirve C:\dev)
-#       .\start.ps1 C:\otra\carpeta
+# Markdown Reader — launcher (Windows / PowerShell)
+# Uso:
+#   .\start.ps1                       sirve la carpeta padre y abre el browser
+#   .\start.ps1 C:\ruta\a\docs        sirve otra carpeta
+#   .\start.ps1 -Port 5000            cambia el puerto
 param(
     [string]$Root = "",
     [int]$Port = 4321
@@ -9,17 +11,16 @@ param(
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-$env:MD_PORT = $Port
-if ($Root -ne "") { $argRoot = $Root } else { $argRoot = "" }
-
-$url = "http://localhost:$Port"
-Write-Host "Iniciando Markdown Reader en $url ..." -ForegroundColor Cyan
-
-# Abrir el browser tras un breve delay (el server arranca casi instantáneo).
-Start-Job -ScriptBlock { param($u) Start-Sleep -Milliseconds 800; Start-Process $u } -ArgumentList $url | Out-Null
-
-if ($argRoot -ne "") {
-    node "$scriptDir\server.js" $argRoot
-} else {
-    node "$scriptDir\server.js"
+# Verificar que Node esté instalado.
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+    Write-Host "ERROR: Node.js no está instalado o no está en el PATH." -ForegroundColor Red
+    Write-Host "Instalalo desde https://nodejs.org (LTS) y volvé a intentar." -ForegroundColor Yellow
+    exit 1
 }
+
+$serverArgs = @("$scriptDir\server.js")
+if ($Root -ne "") { $serverArgs += $Root }
+$serverArgs += @("--port", $Port)
+
+# El server abre el browser solo; acá únicamente lo arrancamos.
+node @serverArgs

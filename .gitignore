@@ -1,0 +1,15 @@
+# Dependencias (no se usan, pero por si se agregan)
+node_modules/
+
+# Logs / runtime
+*.log
+.run/
+.logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# NOTA: public/vendor/ SÍ se versiona a propósito (libs vendoreadas para uso offline)

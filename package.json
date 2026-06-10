@@ -1,0 +1,23 @@
+{
+  "name": "md-reader",
+  "version": "1.0.0",
+  "description": "Cliente web local para leer archivos Markdown: tablas, Mermaid, resaltado de codigo, TOC y estilos personalizables. Sin dependencias npm, funciona offline.",
+  "license": "MIT",
+  "type": "commonjs",
+  "bin": {
+    "md-reader": "server.js"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "keywords": [
+    "markdown",
+    "viewer",
+    "reader",
+    "mermaid",
+    "offline"
+  ]
+}

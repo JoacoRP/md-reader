@@ -16,11 +16,22 @@
         <span class="brand">📖 Markdown Reader</span>
         <button id="collapse-btn" title="Ocultar panel">⮜</button>
       </div>
+      <div class="root-box">
+        <div class="root-row">
+          <input type="text" id="root-input" placeholder="C:\ruta\a\carpeta" autocomplete="off" spellcheck="false" />
+          <button id="root-go" title="Usar esta carpeta como raíz">Ir</button>
+        </div>
+        <div class="root-actions">
+          <button id="root-default" title="Volver a la carpeta por defecto">⟲ Default</button>
+          <span id="root-error" class="root-error"></span>
+        </div>
+      </div>
       <div class="search-box">
         <input type="text" id="search" placeholder="Buscar archivo…" autocomplete="off" />
       </div>
       <div id="tree" class="tree"></div>
       <div class="sidebar-footer">
+        <span class="root-caption">Raíz actual:</span>
         <span id="root-label"></span>
       </div>
     </aside>

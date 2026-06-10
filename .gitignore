@@ -6,6 +6,9 @@ node_modules/
 .run/
 .logs/
 
+# Config local (raíz elegida por PC) — no se versiona
+config.json
+
 # OS / editor
 .DS_Store
 Thumbs.db

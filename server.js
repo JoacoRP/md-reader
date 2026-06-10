@@ -21,12 +21,30 @@ for (let i = 0; i < argv.length; i++) {
   else if (!a.startsWith('-')) cliRoot = a; // first positional = root
 }
 
-// Root to scan for markdown files. Defaults to the parent of this app,
-// override with a positional arg or the MD_ROOT env var.
-const ROOT = path.resolve(cliRoot || process.env.MD_ROOT || path.join(__dirname, '..'));
 const PORT = cliPort || Number(process.env.MD_PORT) || 4321;
 const NO_OPEN = noOpen || process.env.MD_NO_OPEN === '1';
 const PUBLIC = path.join(__dirname, 'public');
+const CONFIG_FILE = path.join(__dirname, 'config.json');
+const DEFAULT_ROOT = path.resolve(path.join(__dirname, '..'));
+
+function isDir(p) {
+  try { return fs.statSync(p).isDirectory(); } catch { return false; }
+}
+function loadConfig() {
+  try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; }
+}
+function saveConfig(cfg) {
+  try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2)); } catch {}
+}
+
+// Root to scan for markdown files. Priority:
+//   1. explicit CLI arg / MD_ROOT env var (always wins, not persisted)
+//   2. last root chosen from the UI (config.json)
+//   3. the parent folder of this app
+// The root is mutable at runtime via POST /api/root.
+const explicitRoot = cliRoot || process.env.MD_ROOT || null;
+let currentRoot = path.resolve(explicitRoot || loadConfig().root || DEFAULT_ROOT);
+if (!isDir(currentRoot)) currentRoot = DEFAULT_ROOT;
 
 const IGNORE_DIRS = new Set([
   'node_modules', '.git', '.svn', 'dist', 'build', 'bin', 'obj',
@@ -74,7 +92,7 @@ function buildTree(dir, depth) {
       children.push({
         type: 'file',
         name,
-        path: path.relative(ROOT, full).split(path.sep).join('/'),
+        path: path.relative(currentRoot, full).split(path.sep).join('/'),
         size,
         mtime
       });
@@ -90,16 +108,16 @@ function buildTree(dir, depth) {
   return {
     type: 'dir',
     name: path.basename(dir) || dir,
-    path: path.relative(ROOT, dir).split(path.sep).join('/'),
+    path: path.relative(currentRoot, dir).split(path.sep).join('/'),
     children
   };
 }
 
-// Resolve a client-supplied relative path safely inside ROOT.
+// Resolve a client-supplied relative path safely inside the current root.
 function safeResolve(relPath) {
-  const target = path.resolve(ROOT, relPath);
-  const rootWithSep = ROOT.endsWith(path.sep) ? ROOT : ROOT + path.sep;
-  if (target !== ROOT && !target.startsWith(rootWithSep)) return null;
+  const target = path.resolve(currentRoot, relPath);
+  const rootWithSep = currentRoot.endsWith(path.sep) ? currentRoot : currentRoot + path.sep;
+  if (target !== currentRoot && !target.startsWith(rootWithSep)) return null;
   return target;
 }
 
@@ -122,14 +140,42 @@ function serveStatic(res, filePath) {
   });
 }
 
-const server = http.createServer((req, res) => {
+// Read and JSON-parse a request body (small payloads only).
+function readBody(req) {
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', (c) => { data += c; if (data.length > 1e6) req.destroy(); });
+    req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } });
+    req.on('error', () => resolve({}));
+  });
+}
+
+const server = http.createServer(async (req, res) => {
   const parsed = url.parse(req.url, true);
   const pathname = decodeURIComponent(parsed.pathname);
 
+  // API: get / set the scan root
+  if (pathname === '/api/root') {
+    if (req.method === 'POST') {
+      const body = await readBody(req);
+      const requested = String(body.path || '').trim();
+      if (!requested) return sendJSON(res, 400, { error: 'Indicá una ruta.' });
+      const resolved = path.resolve(requested);
+      if (!isDir(resolved)) {
+        return sendJSON(res, 400, { error: `La carpeta no existe o no es accesible:\n${resolved}` });
+      }
+      currentRoot = resolved;
+      saveConfig({ ...loadConfig(), root: currentRoot });
+      console.log(`  ↳ Root cambiado a: ${currentRoot}`);
+      return sendJSON(res, 200, { root: currentRoot, default: DEFAULT_ROOT });
+    }
+    return sendJSON(res, 200, { root: currentRoot, default: DEFAULT_ROOT });
+  }
+
   // API: file tree
   if (pathname === '/api/tree') {
-    const tree = buildTree(ROOT, 0) || { type: 'dir', name: ROOT, path: '', children: [] };
-    return sendJSON(res, 200, { root: ROOT, tree });
+    const tree = buildTree(currentRoot, 0) || { type: 'dir', name: currentRoot, path: '', children: [] };
+    return sendJSON(res, 200, { root: currentRoot, default: DEFAULT_ROOT, tree });
   }
 
   // API: raw markdown content
@@ -184,7 +230,7 @@ server.listen(PORT, () => {
   const link = `http://localhost:${PORT}`;
   console.log('\n  📖  Markdown Reader');
   console.log('  ──────────────────────────────────────────');
-  console.log(`  Sirviendo .md desde:  ${ROOT}`);
+  console.log(`  Sirviendo .md desde:  ${currentRoot}`);
   console.log(`  Abierto en:           ${link}`);
   console.log('  (Ctrl+C para detener)\n');
   if (!NO_OPEN) openBrowser(link);

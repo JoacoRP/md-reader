@@ -272,15 +272,55 @@ function updateActiveTOC() {
 }
 
 /* ============================ File tree ============================ */
+let defaultRoot = null;
+
 async function loadTree() {
   const res = await fetch('/api/tree');
   const data = await res.json();
   treeData = data.tree;
+  defaultRoot = data.default;
   rootLabelEl.textContent = data.root;
   rootLabelEl.title = data.root;
+  const rootInput = $('#root-input');
+  if (document.activeElement !== rootInput) rootInput.value = data.root;
   treeEl.innerHTML = '';
   // Render the root's children directly (skip showing the root node itself).
-  treeData.children.forEach((child) => treeEl.appendChild(renderNode(child, 0)));
+  if (!treeData.children.length) {
+    treeEl.innerHTML = '<div class="tree-empty">Sin archivos .md en esta carpeta.</div>';
+  } else {
+    treeData.children.forEach((child) => treeEl.appendChild(renderNode(child, 0)));
+  }
+}
+
+// Change the scan root server-side, then refresh the tree.
+async function changeRoot(newPath) {
+  const errEl = $('#root-error');
+  errEl.textContent = '';
+  const target = (newPath || '').trim();
+  if (!target) return;
+  try {
+    const res = await fetch('/api/root', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: target })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'No se pudo cambiar la raíz.'; return; }
+    // El archivo abierto pertenecía a la raíz anterior: limpiar la vista.
+    currentPath = null;
+    location.hash = '';
+    document.title = 'Markdown Reader';
+    breadcrumbEl.textContent = '';
+    fileMetaEl.textContent = '';
+    tocEl.classList.add('hidden');
+    contentEl.innerHTML = '<div class="empty-state"><h1>📂 Raíz actualizada</h1>' +
+      `<p>Mostrando los <code>.md</code> bajo:</p><p class="hint">${data.root}</p>` +
+      '<p class="hint">Elegí un archivo del panel izquierdo.</p></div>';
+    $('#search').value = '';
+    await loadTree();
+  } catch {
+    errEl.textContent = 'Error de conexión con el servidor.';
+  }
 }
 
 function renderNode(node, depth) {
@@ -414,6 +454,15 @@ function initUI() {
 
   // Search
   $('#search').addEventListener('input', (e) => filterTree(e.target.value));
+
+  // Root selector
+  $('#root-go').addEventListener('click', () => changeRoot($('#root-input').value));
+  $('#root-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') changeRoot($('#root-input').value);
+  });
+  $('#root-default').addEventListener('click', () => {
+    if (defaultRoot) { $('#root-input').value = defaultRoot; changeRoot(defaultRoot); }
+  });
 
   // Theme toggle
   $('#theme-btn').addEventListener('click', () => {

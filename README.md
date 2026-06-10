@@ -61,8 +61,19 @@ Por defecto indexa la **carpeta padre** del proyecto. Para apuntar a otra carpet
 
 > Si el puerto está ocupado, el server lo avisa y sugiere otro.
 
+## Cambiar la carpeta raíz desde la UI
+
+Arriba del panel izquierdo hay un campo donde podés escribir cualquier ruta (ej. `C:\dev`) y tocar **Ir** (o Enter). El reader vuelve a indexar **en cascada** todos los `.md` desde esa carpeta hacia abajo. El botón **⟲ Default** vuelve a la carpeta por defecto (la padre del proyecto).
+
+La raíz elegida se guarda en `config.json` (local, no se versiona), así que la próxima vez que arranques abre directo desde esa carpeta. La prioridad es:
+
+1. Arg de CLI / `MD_ROOT` (si lo pasás explícito, gana y no se persiste).
+2. Última raíz elegida desde la UI (`config.json`).
+3. La carpeta padre del proyecto.
+
 ## Características
 
+- **Raíz configurable** desde la UI, con cascada recursiva de `.md` y persistencia.
 - **Árbol de archivos** lateral con todos los `.md`/`.markdown`/`.mdx` (ignora `node_modules`, `.git`, `bin`, `obj`, etc.).
 - **Buscador** de archivos (`Ctrl/Cmd+K`).
 - **Renderizado GFM**: tablas, listas de tareas, citas, código.

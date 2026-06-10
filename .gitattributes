@@ -1,0 +1,11 @@
+# Normaliza finales de línea: en el repo siempre LF, en el checkout lo nativo.
+* text=auto eol=lf
+
+# Scripts de Windows: mantener CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Librerías vendoreadas: tratarlas como generadas (no contaminan diffs/estadísticas)
+public/vendor/** linguist-vendored
+public/vendor/** -diff

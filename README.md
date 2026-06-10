@@ -71,6 +71,15 @@ La raíz elegida se guarda en `config.json` (local, no se versiona), así que la
 2. Última raíz elegida desde la UI (`config.json`).
 3. La carpeta padre del proyecto.
 
+## Página de configuración
+
+El botón **⚙︎** abre `/settings.html`, una página dedicada al fine-tuning con dos paneles:
+
+- **Izquierda** — controles agrupados (Bootstrap): tipografía (familia, tamaño, interlineado, espaciado de letras, ancho de contenido, separación de párrafos, justificado), colores (texto, fondo, acento, títulos, enlaces + subrayado), código y diagramas (tamaño de código, tema de código, tema de Mermaid) y tema de interfaz. Presets: Default, Sepia, Night, Alto contraste.
+- **Derecha** — una **vista previa en vivo** con un `.md` mock que muestra todos los componentes (h1–h6, texto enriquecido, listas, tareas, tabla, code snippets, Mermaid, blockquotes).
+
+Los cambios se aplican y guardan automáticamente (`localStorage`) y se reflejan en el lector al volver. El styling se maneja con **variables CSS** centralizadas (`config.js`), no con estilos hardcodeados.
+
 ## Características
 
 - **Raíz configurable** desde la UI, con cascada recursiva de `.md` y persistencia.
@@ -80,7 +89,7 @@ La raíz elegida se guarda en `config.json` (local, no se versiona), así que la
 - **Mermaid**: los bloques ```` ```mermaid ```` se dibujan como diagramas.
 - **Resaltado de sintaxis** (highlight.js) con botón _Copiar_ en cada bloque.
 - **Tabla de contenidos** flotante con seguimiento de scroll.
-- **Tema claro/oscuro** y **panel de estilos**: familia tipográfica, tamaño de fuente, interlineado, ancho de contenido, color de texto / fondo / acento. Presets: Default, Sepia, Night, Alto contraste.
+- **Configuración** en página aparte con preview en vivo (ver arriba) + **tema claro/oscuro** rápido desde el lector.
 - Preferencias persistidas en `localStorage`.
 - **Imprimir / exportar a PDF** (🖨 → "Guardar como PDF").
 - **Deep links**: la URL refleja el archivo abierto (`#<ruta>`), se puede compartir/recargar.
@@ -95,11 +104,18 @@ md-reader/
 ├─ start.sh           # launcher macOS / Linux
 ├─ package.json       # `npm start`
 ├─ public/
-│  ├─ index.html
-│  ├─ style.css
-│  ├─ app.js          # render markdown, mermaid, TOC, settings
-│  └─ vendor/         # librerías locales (offline)
+│  ├─ index.html      # lector
+│  ├─ settings.html   # página de configuración (Bootstrap) + preview en vivo
+│  ├─ style.css       # tema del documento vía variables CSS
+│  ├─ config.js       # modelo de configuración: defaults, presets, apply()  (compartido)
+│  ├─ md-core.js      # núcleo de render: marked + mermaid + hljs + sanitize  (compartido)
+│  ├─ app.js          # lógica del lector (árbol, TOC, navegación)
+│  └─ vendor/         # librerías locales (Bootstrap, marked, mermaid, highlight.js, DOMPurify) — offline
 ```
+
+## Stack de frontend
+
+Sin build step y **offline**: todas las librerías están vendoreadas en `public/vendor/` (Bootstrap 5 para el chrome y la página de settings; marked, Mermaid, highlight.js y DOMPurify para el render). El tema del documento se maneja con variables CSS.
 
 ## Seguridad
 

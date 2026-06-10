@@ -11,169 +11,21 @@ const rootLabelEl = $('#root-label');
 
 let currentPath = null;
 let treeData = null;
-
-/* ============================ Settings ============================ */
-const FONT_FAMILIES = {
-  system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-  serif: "Georgia, Cambria, 'Times New Roman', Times, serif"
-};
-
-const DEFAULT_SETTINGS = {
-  fontFamily: 'system',
-  fontSize: 16,
-  lineHeight: 1.7,
-  contentWidth: 860,
-  textColor: '#1f2328',
-  bgColor: '#ffffff',
-  accentColor: '#0969da',
-  theme: 'light'
-};
-
-const PRESETS = {
-  default: { textColor: '#1f2328', bgColor: '#ffffff', accentColor: '#0969da', theme: 'light' },
-  sepia:   { textColor: '#433422', bgColor: '#f4ecd8', accentColor: '#9a5b2e', theme: 'light' },
-  night:   { textColor: '#c9d1d9', bgColor: '#0d1117', accentColor: '#58a6ff', theme: 'dark' },
-  contrast:{ textColor: '#000000', bgColor: '#ffffff', accentColor: '#0033cc', theme: 'light' }
-};
-
-let settings = loadSettings();
-
-function loadSettings() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('md-reader-settings') || '{}');
-    return { ...DEFAULT_SETTINGS, ...saved };
-  } catch {
-    return { ...DEFAULT_SETTINGS };
-  }
-}
-
-function saveSettings() {
-  localStorage.setItem('md-reader-settings', JSON.stringify(settings));
-}
-
-function resolveFontFamily(v) {
-  return FONT_FAMILIES[v] || v;
-}
-
-function applySettings() {
-  const r = document.documentElement.style;
-  r.setProperty('--md-font-family', resolveFontFamily(settings.fontFamily));
-  r.setProperty('--md-font-size', settings.fontSize + 'px');
-  r.setProperty('--md-line-height', settings.lineHeight);
-  r.setProperty('--md-content-width', settings.contentWidth + 'px');
-  r.setProperty('--md-text-color', settings.textColor);
-  r.setProperty('--md-bg-color', settings.bgColor);
-  r.setProperty('--md-accent-color', settings.accentColor);
-  document.documentElement.setAttribute('data-theme', settings.theme);
-
-  // hljs theme + mermaid theme follow light/dark
-  $('#hljs-light').disabled = settings.theme === 'dark';
-  $('#hljs-dark').disabled = settings.theme !== 'dark';
-  $('#theme-btn').textContent = settings.theme === 'dark' ? '☀️' : '🌙';
-
-  syncSettingsControls();
-}
-
-function syncSettingsControls() {
-  $('#set-font-family').value = settings.fontFamily;
-  $('#set-font-size').value = settings.fontSize;
-  $('#fs-val').textContent = settings.fontSize + 'px';
-  $('#set-line-height').value = settings.lineHeight;
-  $('#lh-val').textContent = settings.lineHeight;
-  $('#set-content-width').value = settings.contentWidth;
-  $('#cw-val').textContent = settings.contentWidth + 'px';
-  $('#set-text-color').value = settings.textColor;
-  $('#set-bg-color').value = settings.bgColor;
-  $('#set-accent-color').value = settings.accentColor;
-}
+let settings = MDConfig.load();
 
 /* ============================ Markdown rendering ============================ */
-let mermaidCounter = 0;
-
-function configureMarked() {
-  const renderer = new marked.Renderer();
-
-  // Capture mermaid code blocks; highlight the rest with hljs.
-  renderer.code = function (code, infostring) {
-    const lang = (infostring || '').trim().split(/\s+/)[0].toLowerCase();
-    if (lang === 'mermaid') {
-      const id = 'mermaid-' + (mermaidCounter++);
-      const encoded = encodeURIComponent(code);
-      return `<div class="mermaid-block" data-mermaid="${encoded}" id="${id}"></div>`;
-    }
-    let highlighted, used = lang;
-    try {
-      if (lang && hljs.getLanguage(lang)) {
-        highlighted = hljs.highlight(code, { language: lang }).value;
-      } else {
-        const auto = hljs.highlightAuto(code);
-        highlighted = auto.value; used = auto.language || '';
-      }
-    } catch {
-      highlighted = escapeHtml(code);
-    }
-    return `<pre><button class="copy-code">Copiar</button><code class="hljs language-${used}">${highlighted}</code></pre>`;
-  };
-
-  // Slugged heading anchors for the TOC.
-  renderer.heading = function (text, level) {
-    const slug = slugify(stripTags(text));
-    return `<h${level} id="${slug}">${text}` +
-      `<a class="heading-anchor" href="#${slug}" aria-label="Enlace">#</a></h${level}>`;
-  };
-
-  marked.setOptions({ renderer, gfm: true, breaks: false, headerIds: false, mangle: false });
-}
-
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, (c) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-  ));
-}
-function stripTags(s) { return s.replace(/<[^>]*>/g, ''); }
-
-const slugCounts = {};
-function slugify(text) {
-  let base = text.toLowerCase().trim()
-    .replace(/[^\wÀ-ɏ\s-]/g, '')
-    .replace(/\s+/g, '-');
-  if (!base) base = 'section';
-  if (slugCounts[base] != null) { slugCounts[base]++; base = base + '-' + slugCounts[base]; }
-  else { slugCounts[base] = 0; }
-  return base;
-}
-
 async function renderMarkdown(md) {
-  // reset per-document state
-  for (const k in slugCounts) delete slugCounts[k];
-  mermaidCounter = 0;
-
-  const rawHtml = marked.parse(md);
-  const clean = DOMPurify.sanitize(rawHtml, {
-    ADD_TAGS: ['foreignObject'],
-    ADD_ATTR: ['data-mermaid', 'target']
-  });
-  contentEl.innerHTML = clean;
-
+  contentEl.innerHTML = MDCore.toSafeHtml(md);
   enhanceContent();
-  await renderMermaid();
+  MDCore.attachCopyButtons(contentEl);
+  await MDCore.renderMermaidIn(contentEl, MDConfig.resolveMermaidTheme(settings));
   buildTOC();
   contentEl.parentElement.scrollTop = 0;
 }
 
 function enhanceContent() {
-  // Copy-to-clipboard for code blocks
-  contentEl.querySelectorAll('.copy-code').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const code = btn.parentElement.querySelector('code');
-      navigator.clipboard.writeText(code.innerText).then(() => {
-        btn.textContent = '✓ Copiado';
-        setTimeout(() => (btn.textContent = 'Copiar'), 1200);
-      });
-    });
-  });
-
-  // External links open in a new tab; internal anchors scroll smoothly.
+  // External links open in a new tab; internal anchors scroll smoothly;
+  // relative .md links load in-app.
   contentEl.querySelectorAll('a[href]').forEach((a) => {
     const href = a.getAttribute('href');
     if (href.startsWith('#')) {
@@ -185,11 +37,9 @@ function enhanceContent() {
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
     } else if (/\.(md|markdown|mdx)$/i.test(href)) {
-      // Relative link to another markdown file → load it in-app.
       a.addEventListener('click', (e) => {
         e.preventDefault();
-        const resolved = resolveRelative(currentPath, href);
-        loadFile(resolved);
+        loadFile(resolveRelative(currentPath, href));
       });
     }
   });
@@ -198,8 +48,7 @@ function enhanceContent() {
   contentEl.querySelectorAll('img[src]').forEach((img) => {
     const src = img.getAttribute('src');
     if (!/^(https?:|data:|\/)/.test(src)) {
-      const resolved = resolveRelative(currentPath, src);
-      img.src = '/api/raw?path=' + encodeURIComponent(resolved);
+      img.src = '/api/raw?path=' + encodeURIComponent(resolveRelative(currentPath, src));
     }
   });
 }
@@ -214,26 +63,6 @@ function resolveRelative(fromFile, rel) {
   return base.join('/');
 }
 
-async function renderMermaid() {
-  const blocks = contentEl.querySelectorAll('.mermaid-block');
-  if (!blocks.length) return;
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: settings.theme === 'dark' ? 'dark' : 'default',
-    securityLevel: 'loose'
-  });
-  for (const block of blocks) {
-    const code = decodeURIComponent(block.getAttribute('data-mermaid'));
-    try {
-      const { svg } = await mermaid.render(block.id + '-svg', code);
-      block.innerHTML = svg;
-    } catch (err) {
-      block.classList.add('mermaid-error');
-      block.textContent = 'Error en diagrama Mermaid:\n' + (err && err.message ? err.message : err);
-    }
-  }
-}
-
 /* ============================ Table of contents ============================ */
 let tocLinks = [];
 
@@ -244,7 +73,7 @@ function buildTOC() {
   let html = '<div class="toc-title">Contenido</div>';
   headings.forEach((h) => {
     const lvl = Number(h.tagName[1]);
-    html += `<a href="#${h.id}" class="lvl-${lvl}" data-target="${h.id}">${stripTags(h.innerHTML).replace('#', '')}</a>`;
+    html += `<a href="#${h.id}" class="lvl-${lvl}" data-target="${h.id}">${MDCore.stripTags(h.innerHTML).replace('#', '')}</a>`;
   });
   tocEl.innerHTML = html;
 
@@ -262,8 +91,7 @@ function buildTOC() {
 // Highlight current heading in the TOC while scrolling.
 function updateActiveTOC() {
   if (!tocLinks.length) return;
-  const wrap = $('#content-wrap');
-  const scrollTop = wrap.scrollTop;
+  const scrollTop = $('#content-wrap').scrollTop;
   let activeId = null;
   contentEl.querySelectorAll('h1, h2, h3, h4').forEach((h) => {
     if (h.offsetTop - 90 <= scrollTop) activeId = h.id;
@@ -284,7 +112,6 @@ async function loadTree() {
   const rootInput = $('#root-input');
   if (document.activeElement !== rootInput) rootInput.value = data.root;
   treeEl.innerHTML = '';
-  // Render the root's children directly (skip showing the root node itself).
   if (!treeData.children.length) {
     treeEl.innerHTML = '<div class="tree-empty">Sin archivos .md en esta carpeta.</div>';
   } else {
@@ -362,7 +189,6 @@ function setActiveInTree(path) {
   const node = treeEl.querySelector(`.tree-file[data-path="${cssEscape(path)}"]`);
   if (node) {
     node.querySelector('.tree-label').classList.add('active');
-    // expand ancestors
     let p = node.parentElement;
     while (p && p !== treeEl) {
       if (p.classList.contains('tree-node') && p.classList.contains('collapsed')) {
@@ -384,14 +210,12 @@ function filterTree(query) {
   const files = treeEl.querySelectorAll('.tree-file');
   if (!q) {
     files.forEach((f) => f.classList.remove('hidden'));
-    treeEl.querySelectorAll('.tree-dir').forEach((d) => { d.classList.remove('hidden'); });
+    treeEl.querySelectorAll('.tree-dir').forEach((d) => d.classList.remove('hidden'));
     return;
   }
   files.forEach((f) => {
-    const match = f.dataset.path.toLowerCase().includes(q);
-    f.classList.toggle('hidden', !match);
+    f.classList.toggle('hidden', !f.dataset.path.toLowerCase().includes(q));
   });
-  // Hide empty dirs, expand matching ones.
   treeEl.querySelectorAll('.tree-dir').forEach((d) => {
     const visibleFiles = d.querySelectorAll('.tree-file:not(.hidden)').length;
     d.classList.toggle('hidden', visibleFiles === 0);
@@ -464,17 +288,13 @@ function initUI() {
     if (defaultRoot) { $('#root-input').value = defaultRoot; changeRoot(defaultRoot); }
   });
 
-  // Theme toggle
+  // Theme quick-toggle (full fine-tuning vive en /settings.html)
   $('#theme-btn').addEventListener('click', () => {
-    settings.theme = settings.theme === 'dark' ? 'light' : 'dark';
-    // Adjust document colors to sensible defaults when switching theme.
-    if (settings.theme === 'dark' && settings.bgColor === '#ffffff') {
-      settings.bgColor = '#0d1117'; settings.textColor = '#c9d1d9'; settings.accentColor = '#58a6ff';
-    } else if (settings.theme === 'light' && settings.bgColor === '#0d1117') {
-      settings.bgColor = '#ffffff'; settings.textColor = '#1f2328'; settings.accentColor = '#0969da';
-    }
-    applySettings(); saveSettings();
-    if (currentPath) loadFile(currentPath); // re-render mermaid with new theme
+    const next = settings.theme === 'dark' ? 'light' : 'dark';
+    const preset = MDConfig.PRESETS[next === 'dark' ? 'night' : 'default'];
+    Object.assign(settings, preset, { theme: next });
+    MDConfig.apply(settings); MDConfig.save(settings);
+    if (currentPath) loadFile(currentPath); // re-render mermaid con el tema nuevo
   });
 
   // TOC toggle
@@ -489,37 +309,8 @@ function initUI() {
   // Print
   $('#print-btn').addEventListener('click', () => window.print());
 
-  // Settings panel
-  $('#settings-btn').addEventListener('click', () => $('#settings-panel').classList.toggle('hidden'));
-  $('#settings-close').addEventListener('click', () => $('#settings-panel').classList.add('hidden'));
-
-  const bind = (id, key, transform) => {
-    $(id).addEventListener('input', (e) => {
-      settings[key] = transform ? transform(e.target.value) : e.target.value;
-      applySettings(); saveSettings();
-    });
-  };
-  bind('#set-font-family', 'fontFamily');
-  bind('#set-font-size', 'fontSize', Number);
-  bind('#set-line-height', 'lineHeight', Number);
-  bind('#set-content-width', 'contentWidth', Number);
-  bind('#set-text-color', 'textColor');
-  bind('#set-bg-color', 'bgColor');
-  bind('#set-accent-color', 'accentColor');
-
-  document.querySelectorAll('.settings-presets button').forEach((b) => {
-    b.addEventListener('click', () => {
-      Object.assign(settings, PRESETS[b.dataset.preset]);
-      applySettings(); saveSettings();
-      if (currentPath) loadFile(currentPath);
-    });
-  });
-
-  $('#settings-reset').addEventListener('click', () => {
-    settings = { ...DEFAULT_SETTINGS };
-    applySettings(); saveSettings();
-    if (currentPath) loadFile(currentPath);
-  });
+  // Settings ahora es una página aparte
+  $('#settings-btn').addEventListener('click', () => { window.location.href = 'settings.html'; });
 
   // Active TOC tracking
   $('#content-wrap').addEventListener('scroll', throttle(updateActiveTOC, 120));
@@ -528,6 +319,15 @@ function initUI() {
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault(); $('#search').focus();
+    }
+  });
+
+  // Si cambian los settings en la pestaña de configuración, reflejarlos en vivo.
+  window.addEventListener('storage', (e) => {
+    if (e.key === MDConfig.STORAGE_KEY) {
+      settings = MDConfig.load();
+      MDConfig.apply(settings);
+      if (currentPath) loadFile(currentPath);
     }
   });
 }
@@ -543,15 +343,13 @@ function throttle(fn, ms) {
 
 /* ============================ Boot ============================ */
 async function boot() {
-  configureMarked();
-  applySettings();
+  MDCore.configureMarked();
+  MDConfig.apply(settings);
   initUI();
   await loadTree();
 
-  // Deep-link support: #<path>
   if (location.hash.length > 1) {
-    const path = decodeURIComponent(location.hash.slice(1));
-    loadFile(path);
+    loadFile(decodeURIComponent(location.hash.slice(1)));
   }
 }
 

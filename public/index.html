@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Markdown Reader</title>
+  <link rel="stylesheet" href="/vendor/bootstrap.min.css" />
   <link rel="stylesheet" href="/vendor/highlight-github.min.css" id="hljs-light" />
   <link rel="stylesheet" href="/vendor/highlight-github-dark.min.css" id="hljs-dark" disabled />
   <link rel="stylesheet" href="/style.css" />
@@ -45,7 +46,7 @@
           <span id="file-meta"></span>
           <button id="toc-btn" title="Tabla de contenidos">⋮≡</button>
           <button id="theme-btn" title="Tema claro/oscuro">🌙</button>
-          <button id="settings-btn" title="Estilos">⚙︎</button>
+          <button id="settings-btn" title="Configuración de estilos">⚙︎</button>
           <button id="print-btn" title="Imprimir / PDF">🖨</button>
         </div>
       </header>
@@ -61,58 +62,14 @@
         <nav id="toc" class="toc hidden"></nav>
       </div>
     </main>
-
-    <!-- Settings panel -->
-    <div id="settings-panel" class="settings-panel hidden">
-      <div class="settings-header">
-        <strong>Estilos del documento</strong>
-        <button id="settings-close">✕</button>
-      </div>
-      <div class="settings-body">
-        <label>Familia tipográfica
-          <select id="set-font-family">
-            <option value="system">Sistema (sans)</option>
-            <option value="serif">Serif (lectura)</option>
-            <option value="'Segoe UI', Roboto, Helvetica, Arial, sans-serif">Segoe / Roboto</option>
-            <option value="'Inter', system-ui, sans-serif">Inter</option>
-            <option value="Georgia, 'Times New Roman', serif">Georgia</option>
-            <option value="'JetBrains Mono', 'Fira Code', monospace">Monospace</option>
-          </select>
-        </label>
-        <label>Tamaño de fuente <span id="fs-val" class="val"></span>
-          <input type="range" id="set-font-size" min="12" max="26" step="1" />
-        </label>
-        <label>Interlineado <span id="lh-val" class="val"></span>
-          <input type="range" id="set-line-height" min="1.2" max="2.2" step="0.05" />
-        </label>
-        <label>Ancho de contenido <span id="cw-val" class="val"></span>
-          <input type="range" id="set-content-width" min="600" max="1400" step="20" />
-        </label>
-        <label>Color de texto
-          <input type="color" id="set-text-color" />
-        </label>
-        <label>Color de fondo
-          <input type="color" id="set-bg-color" />
-        </label>
-        <label>Color de acento (links/títulos)
-          <input type="color" id="set-accent-color" />
-        </label>
-        <div class="settings-presets">
-          <span>Presets:</span>
-          <button data-preset="default">Default</button>
-          <button data-preset="sepia">Sepia</button>
-          <button data-preset="night">Night</button>
-          <button data-preset="contrast">Alto contraste</button>
-        </div>
-        <button id="settings-reset" class="reset-btn">Restablecer todo</button>
-      </div>
-    </div>
   </div>
 
   <script src="/vendor/marked.min.js"></script>
   <script src="/vendor/purify.min.js"></script>
   <script src="/vendor/highlight.min.js"></script>
   <script src="/vendor/mermaid.min.js"></script>
+  <script src="/config.js"></script>
+  <script src="/md-core.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

@@ -150,16 +150,23 @@ async function changeRoot(newPath) {
   }
 }
 
+// Ícono (Bootstrap Icons) según el tipo de archivo.
+function fileIcon(kind) {
+  if (kind === 'html') return '<span class="icon ic-html"><i class="bi bi-filetype-html"></i></span>';
+  return '<span class="icon ic-md"><i class="bi bi-filetype-md"></i></span>';
+}
+
 function renderNode(node, depth) {
   if (node.type === 'file') {
     const div = document.createElement('div');
     div.className = 'tree-node tree-file';
     div.dataset.path = node.path;
     div.dataset.name = node.name.toLowerCase();
+    div.dataset.kind = node.kind || 'md';
     const label = document.createElement('div');
     label.className = 'tree-label';
-    label.innerHTML = `<span class="twisty"></span><span class="icon">📄</span><span class="name">${node.name}</span>`;
-    label.addEventListener('click', () => loadFile(node.path));
+    label.innerHTML = `<span class="twisty"></span>${fileIcon(node.kind)}<span class="name">${node.name}</span>`;
+    label.addEventListener('click', () => openFile(node.path, node.kind));
     div.appendChild(label);
     return div;
   }
@@ -169,7 +176,7 @@ function renderNode(node, depth) {
   if (depth >= 1) div.classList.add('collapsed'); // top-level expanded, deeper collapsed
   const label = document.createElement('div');
   label.className = 'tree-label';
-  label.innerHTML = `<span class="twisty">▶</span><span class="icon">📁</span><span class="name">${node.name}</span>`;
+  label.innerHTML = `<span class="twisty">▶</span><span class="icon ic-folder"><i class="bi bi-folder-fill"></i></span><span class="name">${node.name}</span>`;
   label.addEventListener('click', () => {
     div.classList.toggle('collapsed');
     label.querySelector('.twisty').textContent = div.classList.contains('collapsed') ? '▶' : '▼';
@@ -228,9 +235,31 @@ function filterTree(query) {
 }
 
 /* ============================ Load a file ============================ */
+let currentKind = 'md';
+
+function inferKind(path) {
+  return /\.(html?|htm)$/i.test(path) ? 'html' : 'md';
+}
+
+// Despacha según el tipo: markdown se renderiza, HTML se embebe en un iframe.
+function openFile(path, kind) {
+  if (!path) return;
+  kind = kind || inferKind(path);
+  if (kind === 'html') return showHtmlMock(path);
+  return loadFile(path);
+}
+
+// Construye la URL /mock/ preservando los separadores de carpeta.
+function mockUrl(path) {
+  return '/mock/' + path.split('/').map(encodeURIComponent).join('/');
+}
+
 async function loadFile(path) {
   if (!path) return;
   currentPath = path;
+  currentKind = 'md';
+  contentEl.classList.remove('mock-view');
+  $('#open-tab-btn').classList.add('hidden');
   try {
     const res = await fetch('/api/file?path=' + encodeURIComponent(path));
     if (!res.ok) throw new Error('No se pudo cargar el archivo');
@@ -244,6 +273,25 @@ async function loadFile(path) {
   } catch (err) {
     contentEl.innerHTML = `<div class="mermaid-error">⚠️ ${err.message}</div>`;
   }
+}
+
+// Muestra un mock HTML "con esteroides" embebido en un iframe.
+function showHtmlMock(path) {
+  currentPath = path;
+  currentKind = 'html';
+  const url = mockUrl(path);
+  contentEl.classList.add('mock-view');
+  contentEl.innerHTML = `<iframe class="mock-frame" src="${url}" title="${path}"></iframe>`;
+  tocEl.classList.add('hidden');
+  tocLinks = [];
+  updateBreadcrumb(path);
+  fileMetaEl.innerHTML = '<span class="badge-html"><i class="bi bi-filetype-html"></i> Mock HTML</span>';
+  const openBtn = $('#open-tab-btn');
+  openBtn.href = url;
+  openBtn.classList.remove('hidden');
+  setActiveInTree(path);
+  document.title = path.split('/').pop() + ' — Markdown Reader';
+  location.hash = encodeURIComponent(path);
 }
 
 function updateBreadcrumb(path) {
@@ -294,7 +342,7 @@ function initUI() {
     const preset = MDConfig.PRESETS[next === 'dark' ? 'night' : 'default'];
     Object.assign(settings, preset, { theme: next });
     MDConfig.apply(settings); MDConfig.save(settings);
-    if (currentPath) loadFile(currentPath); // re-render mermaid con el tema nuevo
+    if (currentPath && currentKind === 'md') loadFile(currentPath); // re-render mermaid
   });
 
   // TOC toggle
@@ -323,11 +371,12 @@ function initUI() {
   });
 
   // Si cambian los settings en la pestaña de configuración, reflejarlos en vivo.
+  // Los mocks HTML viven en un iframe propio: no se re-renderizan.
   window.addEventListener('storage', (e) => {
     if (e.key === MDConfig.STORAGE_KEY) {
       settings = MDConfig.load();
       MDConfig.apply(settings);
-      if (currentPath) loadFile(currentPath);
+      if (currentPath && currentKind === 'md') loadFile(currentPath);
     }
   });
 }
@@ -349,7 +398,7 @@ async function boot() {
   await loadTree();
 
   if (location.hash.length > 1) {
-    loadFile(decodeURIComponent(location.hash.slice(1)));
+    openFile(decodeURIComponent(location.hash.slice(1)));
   }
 }
 

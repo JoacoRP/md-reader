@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Markdown Reader</title>
   <link rel="stylesheet" href="/vendor/bootstrap.min.css" />
+  <link rel="stylesheet" href="/vendor/bootstrap-icons.min.css" />
   <link rel="stylesheet" href="/vendor/highlight-github.min.css" id="hljs-light" />
   <link rel="stylesheet" href="/vendor/highlight-github-dark.min.css" id="hljs-dark" disabled />
   <link rel="stylesheet" href="/style.css" />
@@ -14,20 +15,21 @@
     <!-- Sidebar -->
     <aside id="sidebar">
       <div class="sidebar-header">
-        <span class="brand">📖 Markdown Reader</span>
-        <button id="collapse-btn" title="Ocultar panel">⮜</button>
+        <span class="brand"><i class="bi bi-book-half"></i> Markdown Reader</span>
+        <button id="collapse-btn" title="Ocultar panel"><i class="bi bi-chevron-left"></i></button>
       </div>
       <div class="root-box">
         <div class="root-row">
           <input type="text" id="root-input" placeholder="C:\ruta\a\carpeta" autocomplete="off" spellcheck="false" />
-          <button id="root-go" title="Usar esta carpeta como raíz">Ir</button>
+          <button id="root-go" title="Usar esta carpeta como raíz"><i class="bi bi-arrow-right-short"></i> Ir</button>
         </div>
         <div class="root-actions">
-          <button id="root-default" title="Volver a la carpeta por defecto">⟲ Default</button>
+          <button id="root-default" title="Volver a la carpeta por defecto"><i class="bi bi-arrow-counterclockwise"></i> Default</button>
           <span id="root-error" class="root-error"></span>
         </div>
       </div>
       <div class="search-box">
+        <i class="bi bi-search search-icon"></i>
         <input type="text" id="search" placeholder="Buscar archivo…" autocomplete="off" />
       </div>
       <div id="tree" class="tree"></div>
@@ -40,23 +42,24 @@
     <!-- Main -->
     <main id="main">
       <header id="topbar">
-        <button id="expand-btn" title="Mostrar panel" class="hidden">☰</button>
+        <button id="expand-btn" title="Mostrar panel" class="hidden"><i class="bi bi-list"></i></button>
         <div id="breadcrumb"></div>
         <div class="topbar-actions">
           <span id="file-meta"></span>
-          <button id="toc-btn" title="Tabla de contenidos">⋮≡</button>
-          <button id="theme-btn" title="Tema claro/oscuro">🌙</button>
-          <button id="settings-btn" title="Configuración de estilos">⚙︎</button>
-          <button id="print-btn" title="Imprimir / PDF">🖨</button>
+          <a id="open-tab-btn" class="hidden" title="Abrir mock en pestaña nueva" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i></a>
+          <button id="toc-btn" title="Tabla de contenidos"><i class="bi bi-list-nested"></i></button>
+          <button id="theme-btn" title="Tema claro/oscuro"><i class="bi bi-moon-stars"></i></button>
+          <button id="settings-btn" title="Configuración de estilos"><i class="bi bi-gear"></i></button>
+          <button id="print-btn" title="Imprimir / PDF"><i class="bi bi-printer"></i></button>
         </div>
       </header>
 
       <div id="content-wrap">
         <article id="content" class="markdown-body">
           <div class="empty-state">
-            <h1>📖 Markdown Reader</h1>
-            <p>Seleccioná un archivo <code>.md</code> del panel izquierdo para verlo renderizado.</p>
-            <p class="hint">Soporta tablas, diagramas Mermaid, resaltado de código, tabla de contenidos y estilos personalizables.</p>
+            <h1><i class="bi bi-book-half"></i> Markdown Reader</h1>
+            <p>Seleccioná un archivo <code>.md</code> o un mock <code>.html</code> del panel izquierdo.</p>
+            <p class="hint">Soporta tablas, diagramas Mermaid, resaltado de código, tabla de contenidos, mocks HTML embebidos y estilos personalizables.</p>
           </div>
         </article>
         <nav id="toc" class="toc hidden"></nav>

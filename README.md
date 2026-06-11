@@ -80,10 +80,19 @@ El botón **⚙︎** abre `/settings.html`, una página dedicada al fine-tuning 
 
 Los cambios se aplican y guardan automáticamente (`localStorage`) y se reflejan en el lector al volver. El styling se maneja con **variables CSS** centralizadas (`config.js`), no con estilos hardcodeados.
 
+## Mocks HTML embebidos
+
+Además de Markdown, el árbol lista archivos **`.html`** (por ejemplo los mockups "con esteroides" de `cgas-spec-hub`). Al hacer clic se muestran embebidos en un **iframe** dentro del lector, con un botón <i>Abrir en pestaña</i> para verlos a pantalla completa.
+
+Se sirven bajo la ruta `/mock/<ruta>` (no `/api/raw`) para que sus **enlaces y assets relativos** (`href="index.html"`, imágenes, etc.) resuelvan correctamente. La navegación entre mocks relacionados funciona dentro del iframe.
+
+Los `.md` y `.html` se distinguen en el árbol por **íconos** (Bootstrap Icons): <i>filetype-md</i> en azul y <i>filetype-html</i> en naranja.
+
 ## Características
 
-- **Raíz configurable** desde la UI, con cascada recursiva de `.md` y persistencia.
-- **Árbol de archivos** lateral con todos los `.md`/`.markdown`/`.mdx` (ignora `node_modules`, `.git`, `bin`, `obj`, etc.).
+- **Raíz configurable** desde la UI, con cascada recursiva de `.md`/`.html` y persistencia.
+- **Árbol de archivos** lateral con `.md`/`.markdown`/`.mdx` y `.html`/`.htm`, con íconos por tipo (ignora `node_modules`, `.git`, `bin`, `obj`, etc.).
+- **Mocks HTML** embebidos en iframe (ver arriba).
 - **Buscador** de archivos (`Ctrl/Cmd+K`).
 - **Renderizado GFM**: tablas, listas de tareas, citas, código.
 - **Mermaid**: los bloques ```` ```mermaid ```` se dibujan como diagramas.
@@ -115,7 +124,7 @@ md-reader/
 
 ## Stack de frontend
 
-Sin build step y **offline**: todas las librerías están vendoreadas en `public/vendor/` (Bootstrap 5 para el chrome y la página de settings; marked, Mermaid, highlight.js y DOMPurify para el render). El tema del documento se maneja con variables CSS.
+Sin build step y **offline**: todas las librerías están vendoreadas en `public/vendor/` (Bootstrap 5 + Bootstrap Icons para el chrome y la página de settings; marked, Mermaid, highlight.js y DOMPurify para el render). El tema del documento se maneja con variables CSS.
 
 ## Seguridad
 

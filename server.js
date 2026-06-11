@@ -54,7 +54,9 @@ const IGNORE_DIRS = new Set([
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
@@ -63,10 +65,23 @@ const MIME = {
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
   '.webp': 'image/webp',
-  '.ico': 'image/x-icon'
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.ttf': 'font/ttf',
+  '.eot': 'application/vnd.ms-fontobject',
+  '.map': 'application/json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8'
 };
 
-// Recursively build a tree of folders containing markdown files.
+// Extensiones soportadas en el árbol y su "kind" para el ícono del cliente.
+function fileKind(name) {
+  if (/\.(md|markdown|mdx)$/i.test(name)) return 'md';
+  if (/\.(html?|htm)$/i.test(name)) return 'html';
+  return null;
+}
+
+// Recursively build a tree of folders containing supported files (md + html).
 function buildTree(dir, depth) {
   if (depth > 12) return null;
   let entries;
@@ -86,11 +101,14 @@ function buildTree(dir, depth) {
       if (IGNORE_DIRS.has(name.toLowerCase())) continue;
       const sub = buildTree(full, depth + 1);
       if (sub && sub.children.length) children.push(sub);
-    } else if (ent.isFile() && /\.(md|markdown|mdx)$/i.test(name)) {
+    } else if (ent.isFile()) {
+      const kind = fileKind(name);
+      if (!kind) continue;
       let size = 0, mtime = 0;
       try { const st = fs.statSync(full); size = st.size; mtime = st.mtimeMs; } catch {}
       children.push({
         type: 'file',
+        kind,
         name,
         path: path.relative(currentRoot, full).split(path.sep).join('/'),
         size,
@@ -176,6 +194,15 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/tree') {
     const tree = buildTree(currentRoot, 0) || { type: 'dir', name: currentRoot, path: '', children: [] };
     return sendJSON(res, 200, { root: currentRoot, default: DEFAULT_ROOT, tree });
+  }
+
+  // Mocks HTML "con esteroides": se sirven bajo /mock/<ruta> para que sus
+  // links y assets relativos resuelvan correctamente (se cargan en un iframe).
+  if (pathname.startsWith('/mock/')) {
+    const rel = pathname.slice('/mock/'.length);
+    const target = safeResolve(rel);
+    if (!target) { res.writeHead(400); return res.end('Invalid path'); }
+    return serveStatic(res, target);
   }
 
   // API: raw markdown content

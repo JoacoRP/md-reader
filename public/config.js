@@ -92,7 +92,9 @@
     if (hd) hd.disabled = !dark;
 
     const tb = document.getElementById('theme-btn');
-    if (tb) tb.textContent = s.theme === 'dark' ? '☀️' : '🌙';
+    if (tb) tb.innerHTML = s.theme === 'dark'
+      ? '<i class="bi bi-sun"></i>'
+      : '<i class="bi bi-moon-stars"></i>';
   }
 
   window.MDConfig = { STORAGE_KEY, FONT_FAMILIES, DEFAULTS, PRESETS, load, save, apply, resolveFontFamily, resolveMermaidTheme };

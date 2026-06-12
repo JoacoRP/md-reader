@@ -10,13 +10,15 @@ Hay dos formas de usarlo:
 
 ## Instalar como app de Windows (sin Node)
 
-Para quien sólo quiere usarlo:
+Para quien sólo quiere usarlo, te van a llegar **3 archivos juntos** (carpeta o zip): el instalador `Markdown Reader Setup x.y.z.exe`, `md-reader.cer` y `Confiar-MarkdownReader.cmd`.
 
-1. Pedí el instalador **`Markdown Reader Setup x.y.z.exe`** (lo genera un desarrollador — ver [Build del instalador](#build-del-instalador-desarrolladores)).
-2. Doble clic. Se instala **por usuario, sin permisos de administrador**, y crea accesos directos en **Escritorio** y **Menú Inicio**.
+1. **Una sola vez**, doble clic en **`Confiar-MarkdownReader.cmd`**. Confía el editor y desbloquea el instalador (no pide administrador). Esto evita los avisos *"Editor desconocido"* y *"Windows protegió tu PC → Ejecutar de todas formas"*.
+2. Te ofrece instalar ahí mismo (o doble clic en el instalador). Se instala **por usuario, sin admin**, con accesos directos en **Escritorio** y **Menú Inicio**.
 3. Abrí **Markdown Reader** desde el acceso directo. Es una ventana de app normal; al cerrarla se cierra todo.
 
-> **Aviso de SmartScreen**: como el `.exe` no está firmado, Windows puede mostrar *"Windows protegió tu PC / Editor desconocido"*. Tocá **Más información → Ejecutar de todas formas**. (Si IT bloquea ejecutables sin firmar, hay que coordinar con ellos o firmar la app.)
+> ¿Por qué el paso 1? La app está **firmada** con un certificado propio; `Confiar-MarkdownReader.cmd` agrega ese editor a tus "Editores de confianza" (sólo para tu usuario) y le saca al instalador la "Marca de la Web" (lo que dispara SmartScreen). Es un paso único: futuras versiones ya no piden nada.
+>
+> Alternativa sin el script: pedí el instalador por **carpeta de red o pendrive** (no traen esa marca) y listo.
 
 La app abre por defecto en tu carpeta **Documentos**. Podés cambiar la carpeta raíz desde el menú **Archivo → Abrir carpeta…** o desde el campo de ruta del panel; la elección se recuerda (se guarda en `%APPDATA%\md-reader\config.json`).
 
@@ -129,13 +131,33 @@ La app de Windows se empaqueta con **Electron + electron-builder**. Estas son de
 
 ```bash
 npm install          # una vez: trae electron y electron-builder (~deps de dev)
-npm run build:win    # genera dist\Markdown Reader Setup x.y.z.exe
+npm run build:win    # genera dist\Markdown Reader Setup x.y.z.exe (sin firmar)
 ```
 
-- El instalador queda en `dist/` (gitignored). Es lo único que se le pasa a los compañeros.
-- Para publicar una versión nueva: subí `version` en `package.json`, `npm run build:win`, y compartí el nuevo `.exe` (se instala encima del anterior y conserva la config del usuario).
-- El ícono está en `build/icon.ico`. El instalador es **per-user** (sin admin) y **sin firma** por ahora.
+- El instalador queda en `dist/` (gitignored). Para publicar una versión nueva: subí `version` en `package.json`, recompilá y compartí el nuevo `.exe` (se instala encima del anterior y conserva la config del usuario).
+- El ícono está en `build/icon.ico`. El instalador es **per-user** (sin admin).
 - Modo desarrollo de la ventana de Electron: `npm run app`.
+
+### Build firmado (recomendado para el equipo)
+
+Para que los compañeros no vean *"Editor desconocido"*, la app se firma con un **certificado self-signed** propio (gratis, sin IT). Es un círculo cerrado: sólo confían quienes vos autorizás.
+
+```powershell
+# 1) Una sola vez: generar el certificado (elegí tu propia clave secreta)
+.\tools\make-cert.ps1 -Password "TU_CLAVE_SECRETA"
+
+# 2) Compilar firmado (misma clave)
+.\tools\build-signed.ps1 -Password "TU_CLAVE_SECRETA"
+```
+
+Esto deja:
+- `build\cert\md-reader.pfx` — **privado**, firma la app. **No compartir, no commitear** (está gitignored).
+- `build\cert\md-reader.cer` — **público**, se distribuye al equipo.
+- `dist\Markdown Reader Setup x.y.z.exe` — instalador **firmado**.
+
+**Para distribuir**, entregá juntos (carpeta o zip): el **Setup .exe** + **`build\cert\md-reader.cer`** + **`tools\Confiar-MarkdownReader.cmd`** (y `Confiar-MarkdownReader.ps1`). El compañero corre el `.cmd` una vez (ver [Instalar como app](#instalar-como-app-de-windows-sin-node)).
+
+> Seguridad: el `.pfx` es la identidad de firma — guardalo bien. Si se filtra, regenerá el cert (`make-cert.ps1`) y los compañeros vuelven a confiar el nuevo `.cer`. El certificado dura 10 años.
 
 > Arquitectura: Electron corre el mismo `server.js` in-process (puerto efímero en loopback) y muestra el frontend en una ventana. Por eso el CLI y la app comparten exactamente la misma lógica.
 
@@ -147,7 +169,12 @@ md-reader/
 ├─ electron/
 │  └─ main.js         # proceso principal de Electron (app de Windows)
 ├─ build/
-│  └─ icon.ico        # ícono de la app / instalador
+│  └─ icon.ico        # ícono de la app / instalador  (build/cert/ es gitignored)
+├─ tools/
+│  ├─ make-cert.ps1               # genera el certificado self-signed (dev)
+│  ├─ build-signed.ps1            # compila el instalador firmado (dev)
+│  ├─ Confiar-MarkdownReader.ps1  # el equipo confía el editor + desbloquea
+│  └─ Confiar-MarkdownReader.cmd  # wrapper doble-clic del anterior
 ├─ start.cmd          # launcher Windows (doble-clic / cmd)
 ├─ start.ps1          # launcher Windows (PowerShell)
 ├─ start.sh           # launcher macOS / Linux

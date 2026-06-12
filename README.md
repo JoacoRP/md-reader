@@ -2,11 +2,29 @@
 
 Cliente web local para leer y editar archivos **Markdown** (y mockups **HTML**) de forma legible: tablas, diagramas **Mermaid**, resaltado de código, tabla de contenidos, mocks embebidos y estilos totalmente personalizables.
 
-Sin build step y **offline**: no tiene dependencias de npm, sólo necesita **Node.js**. Las librerías de frontend (Bootstrap, marked, Mermaid, highlight.js, DOMPurify) están vendoreadas en `public/vendor/`.
+Hay dos formas de usarlo:
+- **Como app de Windows** (recomendado para usuarios no técnicos): se instala con un `.exe` y se usa como cualquier programa, **sin Node ni terminal**.
+- **Vía CLI / Node** (para desarrolladores): el frontend es offline y sin dependencias (Bootstrap, marked, Mermaid, highlight.js, DOMPurify están vendoreadas en `public/vendor/`).
 
 ---
 
-## Requisitos
+## Instalar como app de Windows (sin Node)
+
+Para quien sólo quiere usarlo:
+
+1. Pedí el instalador **`Markdown Reader Setup x.y.z.exe`** (lo genera un desarrollador — ver [Build del instalador](#build-del-instalador-desarrolladores)).
+2. Doble clic. Se instala **por usuario, sin permisos de administrador**, y crea accesos directos en **Escritorio** y **Menú Inicio**.
+3. Abrí **Markdown Reader** desde el acceso directo. Es una ventana de app normal; al cerrarla se cierra todo.
+
+> **Aviso de SmartScreen**: como el `.exe` no está firmado, Windows puede mostrar *"Windows protegió tu PC / Editor desconocido"*. Tocá **Más información → Ejecutar de todas formas**. (Si IT bloquea ejecutables sin firmar, hay que coordinar con ellos o firmar la app.)
+
+La app abre por defecto en tu carpeta **Documentos**. Podés cambiar la carpeta raíz desde el menú **Archivo → Abrir carpeta…** o desde el campo de ruta del panel; la elección se recuerda (se guarda en `%APPDATA%\md-reader\config.json`).
+
+Para desinstalar: *Configuración de Windows → Aplicaciones → Markdown Reader → Desinstalar*.
+
+---
+
+## Requisitos (uso vía CLI / desarrollo)
 
 Lo único necesario es **Node.js ≥ 16** y un browser. Verificá si ya lo tenés:
 
@@ -105,15 +123,35 @@ Por defecto indexa la **carpeta padre** del proyecto. Para cambiar carpeta o pue
 
 ---
 
+## Build del instalador (desarrolladores)
+
+La app de Windows se empaqueta con **Electron + electron-builder**. Estas son dependencias **sólo de build** (no afectan el uso vía CLI ni el runtime de los compañeros).
+
+```bash
+npm install          # una vez: trae electron y electron-builder (~deps de dev)
+npm run build:win    # genera dist\Markdown Reader Setup x.y.z.exe
+```
+
+- El instalador queda en `dist/` (gitignored). Es lo único que se le pasa a los compañeros.
+- Para publicar una versión nueva: subí `version` en `package.json`, `npm run build:win`, y compartí el nuevo `.exe` (se instala encima del anterior y conserva la config del usuario).
+- El ícono está en `build/icon.ico`. El instalador es **per-user** (sin admin) y **sin firma** por ahora.
+- Modo desarrollo de la ventana de Electron: `npm run app`.
+
+> Arquitectura: Electron corre el mismo `server.js` in-process (puerto efímero en loopback) y muestra el frontend en una ventana. Por eso el CLI y la app comparten exactamente la misma lógica.
+
 ## Estructura del proyecto
 
 ```
 md-reader/
 ├─ server.js          # servidor HTTP sin dependencias (índice, lectura/escritura, mocks, auto-open)
+├─ electron/
+│  └─ main.js         # proceso principal de Electron (app de Windows)
+├─ build/
+│  └─ icon.ico        # ícono de la app / instalador
 ├─ start.cmd          # launcher Windows (doble-clic / cmd)
 ├─ start.ps1          # launcher Windows (PowerShell)
 ├─ start.sh           # launcher macOS / Linux
-├─ package.json       # metadatos + `npm start`
+├─ package.json       # metadatos + scripts + config de electron-builder
 ├─ public/
 │  ├─ index.html      # lector
 │  ├─ settings.html   # página de configuración (Bootstrap) + preview en vivo

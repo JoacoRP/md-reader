@@ -2,6 +2,7 @@
 /* Modelo de configuración compartido entre el lector y la página de settings.
    Centraliza los valores por defecto, presets y la aplicación de variables CSS. */
 (function () {
+  const VERSION = '1.1.0';
   const STORAGE_KEY = 'md-reader-settings';
 
   const FONT_FAMILIES = {
@@ -83,6 +84,8 @@
     r.setProperty('--md-link-underline-hover', s.linkUnderline === 'none' ? 'none' : 'underline');
     r.setProperty('--md-code-font-size', s.codeFontSize + 'px');
     document.documentElement.setAttribute('data-theme', s.theme);
+    // Bootstrap 5.3 adapta sus componentes (selects, inputs, cards) con este atributo.
+    document.documentElement.setAttribute('data-bs-theme', s.theme);
 
     // Hoja de estilo de highlight.js según codeTheme (auto sigue al tema).
     const dark = s.codeTheme === 'dark' || (s.codeTheme === 'auto' && s.theme === 'dark');
@@ -97,5 +100,18 @@
       : '<i class="bi bi-moon-stars"></i>';
   }
 
-  window.MDConfig = { STORAGE_KEY, FONT_FAMILIES, DEFAULTS, PRESETS, load, save, apply, resolveFontFamily, resolveMermaidTheme };
+  // ---- Presets/temas custom creados por el usuario ----
+  const PRESETS_KEY = 'md-reader-presets';
+  function loadPresets() {
+    try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || '[]'); } catch { return []; }
+  }
+  function savePresets(list) {
+    try { localStorage.setItem(PRESETS_KEY, JSON.stringify(list)); } catch {}
+  }
+
+  window.MDConfig = {
+    VERSION, STORAGE_KEY, PRESETS_KEY, FONT_FAMILIES, DEFAULTS, PRESETS,
+    load, save, apply, resolveFontFamily, resolveMermaidTheme,
+    loadPresets, savePresets
+  };
 })();

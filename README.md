@@ -75,10 +75,12 @@ La raíz elegida se guarda en `config.json` (local, no se versiona), así que la
 
 El botón **⚙︎** abre `/settings.html`, una página dedicada al fine-tuning con dos paneles:
 
-- **Izquierda** — controles agrupados (Bootstrap): tipografía (familia, tamaño, interlineado, espaciado de letras, ancho de contenido, separación de párrafos, justificado), colores (texto, fondo, acento, títulos, enlaces + subrayado), código y diagramas (tamaño de código, tema de código, tema de Mermaid) y tema de interfaz. Presets: Default, Sepia, Night, Alto contraste.
+- **Izquierda** — primero una sección **Temas** (elegir preset integrado o custom, y guardar el estado actual como tema propio); luego controles agrupados (Bootstrap): tipografía (familia, tamaño, interlineado, espaciado de letras, ancho de contenido, separación de párrafos, justificado), colores (texto, fondo, acento, títulos, enlaces + subrayado), código y diagramas (tamaño de código, tema de código, tema de Mermaid) y tema de interfaz.
 - **Derecha** — una **vista previa en vivo** con un `.md` mock que muestra todos los componentes (h1–h6, texto enriquecido, listas, tareas, tabla, code snippets, Mermaid, blockquotes).
 
-Los cambios se aplican y guardan automáticamente (`localStorage`) y se reflejan en el lector al volver. El styling se maneja con **variables CSS** centralizadas (`config.js`), no con estilos hardcodeados.
+**Temas custom:** además de los presets integrados (Default, Sepia, Night, Alto contraste), podés guardar el estado actual de la configuración como un tema propio con nombre, reutilizable y borrable (persistido en `localStorage`). El **Restablecer** pide confirmación.
+
+Los cambios se aplican y guardan automáticamente (`localStorage`) y se reflejan en el lector al volver. Los controles de Bootstrap siguen el tema claro/oscuro (`data-bs-theme`). El styling se maneja con **variables CSS** centralizadas (`config.js`), no con estilos hardcodeados.
 
 ## Mocks HTML embebidos
 

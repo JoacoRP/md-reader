@@ -178,23 +178,106 @@ function init() {
     el('set-' + k).addEventListener('change', (e) => { s[k] = e.target.checked; commit(k); });
   });
 
-  document.querySelectorAll('[data-preset]').forEach((b) => {
-    b.addEventListener('click', () => {
-      Object.assign(s, MDConfig.PRESETS[b.dataset.preset]);
-      syncControls();
-      commit(); // full re-render
-    });
-  });
+  // Guardar el estado actual como tema custom
+  el('preset-save').addEventListener('click', saveCurrentAsPreset);
+  el('preset-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveCurrentAsPreset(); });
 
+  // Restablecer (con confirmación)
   el('reset-btn').addEventListener('click', () => {
+    if (!confirm('¿Restablecer todos los valores a los predeterminados? Se perderán los ajustes actuales no guardados como tema.')) return;
     s = { ...MDConfig.DEFAULTS };
     syncControls();
     commit();
   });
 
+  renderPresetList();
   syncControls();
   MDConfig.apply(s);
   renderPreview();
+}
+
+/* ============================ Temas / presets ============================ */
+// Etiquetas legibles para los presets integrados.
+const BUILTIN_LABELS = { default: 'Default', sepia: 'Sepia', night: 'Night', contrast: 'Alto contraste' };
+
+function applyPreset(values) {
+  Object.assign(s, values);
+  syncControls();
+  commit(); // re-render completo
+}
+
+function chipSwatch(values) {
+  // Pequeña muestra con los colores de fondo/acento del tema.
+  const bg = values.bgColor || s.bgColor;
+  const accent = values.accentColor || s.accentColor;
+  return `<span class="swatch" style="background:linear-gradient(135deg, ${bg} 50%, ${accent} 50%)"></span>`;
+}
+
+function renderPresetList() {
+  const host = el('preset-list');
+  host.innerHTML = '';
+
+  // Integrados (esquemas de color parciales)
+  for (const key of Object.keys(MDConfig.PRESETS)) {
+    const values = MDConfig.PRESETS[key];
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'preset-chip builtin';
+    chip.innerHTML = chipSwatch(values) + `<span>${BUILTIN_LABELS[key] || key}</span>`;
+    chip.addEventListener('click', () => applyPreset(values));
+    host.appendChild(chip);
+  }
+
+  // Custom (snapshots completos del usuario)
+  const customs = MDConfig.loadPresets();
+  customs.forEach((preset, idx) => {
+    const chip = document.createElement('span');
+    chip.className = 'preset-chip';
+    chip.innerHTML = chipSwatch(preset.settings) + `<span>${escapeText(preset.name)}</span>`;
+    chip.addEventListener('click', () => applyPreset(preset.settings));
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'del';
+    del.title = 'Eliminar tema';
+    del.innerHTML = '<i class="bi bi-x-lg"></i>';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!confirm(`¿Eliminar el tema "${preset.name}"?`)) return;
+      const list = MDConfig.loadPresets();
+      list.splice(idx, 1);
+      MDConfig.savePresets(list);
+      renderPresetList();
+    });
+    chip.appendChild(del);
+    host.appendChild(chip);
+  });
+}
+
+function saveCurrentAsPreset() {
+  const input = el('preset-name');
+  const name = input.value.trim();
+  const msg = el('preset-msg');
+  if (!name) { msg.className = 'preset-msg err'; msg.textContent = 'Poné un nombre para el tema.'; return; }
+  const list = MDConfig.loadPresets();
+  const existing = list.findIndex((p) => p.name.toLowerCase() === name.toLowerCase());
+  const entry = { name, settings: { ...s } };
+  if (existing >= 0) {
+    if (!confirm(`Ya existe un tema "${name}". ¿Sobrescribirlo?`)) return;
+    list[existing] = entry;
+  } else {
+    list.push(entry);
+  }
+  MDConfig.savePresets(list);
+  input.value = '';
+  renderPresetList();
+  msg.className = 'preset-msg ok';
+  msg.textContent = `Tema "${name}" guardado.`;
+}
+
+function escapeText(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
 }
 
 init();

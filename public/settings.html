@@ -42,26 +42,58 @@
     }
     /* Que el markdown-body de la preview no se centre ni tope ancho del wrapper */
     .settings-preview-pane .markdown-body { margin: 0 auto; }
+
+    /* Temas / presets */
+    .preset-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .preset-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      border: 1px solid var(--bs-border-color); border-radius: 14px;
+      padding: 3px 6px 3px 11px; font-size: 12px; cursor: pointer;
+      background: var(--bs-tertiary-bg); color: var(--bs-body-color);
+    }
+    .preset-chip:hover { border-color: var(--md-accent-color); }
+    .preset-chip.builtin { padding-right: 11px; }
+    .preset-chip .swatch {
+      width: 11px; height: 11px; border-radius: 50%;
+      border: 1px solid rgba(128,128,128,.4);
+    }
+    .preset-chip .del {
+      border: 0; background: transparent; color: var(--bs-secondary-color);
+      font-size: 13px; line-height: 1; padding: 0 2px; border-radius: 50%; cursor: pointer;
+    }
+    .preset-chip .del:hover { color: #cf222e; }
+    .preset-msg { font-size: 11px; color: var(--bs-secondary-color); margin-top: 6px; min-height: 14px; }
+    .preset-msg.ok { color: #1a7f37; }
+    .preset-msg.err { color: #cf222e; }
   </style>
 </head>
-<body data-theme="light">
+<body>
   <div class="settings-layout">
     <nav class="settings-navbar">
-      <a href="/" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Volver al lector</a>
+      <a href="/" class="btn btn-sm btn-outline-secondary" title="Volver al lector"><i class="bi bi-arrow-left"></i></a>
       <span class="title"><i class="bi bi-gear"></i> Configuración de estilos</span>
       <span class="spacer"></span>
-      <div class="btn-group btn-group-sm" role="group" aria-label="Presets">
-        <button class="btn btn-outline-secondary" data-preset="default">Default</button>
-        <button class="btn btn-outline-secondary" data-preset="sepia">Sepia</button>
-        <button class="btn btn-outline-secondary" data-preset="night">Night</button>
-        <button class="btn btn-outline-secondary" data-preset="contrast">Contraste</button>
-      </div>
-      <button id="reset-btn" class="btn btn-sm btn-outline-danger">Restablecer</button>
+      <button id="reset-btn" class="btn btn-sm btn-outline-danger"><i class="bi bi-arrow-counterclockwise"></i> Restablecer</button>
     </nav>
 
     <div class="settings-main">
       <!-- Panel izquierdo: controles -->
       <aside class="settings-form">
+        <div class="card mb-3">
+          <div class="card-header"><i class="bi bi-palette"></i> Temas</div>
+          <div class="card-body">
+            <label class="form-label">Elegí un tema</label>
+            <div id="preset-list" class="preset-list"></div>
+            <hr class="my-3" />
+            <label class="form-label" for="preset-name">Guardar el estado actual como tema</label>
+            <div class="input-group input-group-sm">
+              <input type="text" class="form-control" id="preset-name" placeholder="Nombre del tema…" maxlength="40" />
+              <button class="btn btn-primary" id="preset-save"><i class="bi bi-save"></i> Guardar</button>
+            </div>
+            <div id="preset-msg" class="preset-msg"></div>
+          </div>
+        </div>
+
         <div class="card mb-3">
           <div class="card-header">Tipografía</div>
           <div class="card-body">

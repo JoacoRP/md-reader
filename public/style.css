@@ -100,17 +100,19 @@ html, body {
   outline: none;
 }
 #root-input:focus { border-color: var(--md-accent-color); }
-#root-go {
+/* Botones cuadrados de borde redondeado, solo ícono */
+.root-icon-btn {
+  flex: none;
+  width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; border-radius: 6px; font-size: 16px;
   border: 1px solid var(--ui-border);
-  background: var(--md-accent-color);
-  color: #fff;
-  font-size: 13px;
-  padding: 5px 12px;
 }
-#root-go:hover { filter: brightness(1.08); background: var(--md-accent-color); }
-.root-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-#root-default { border: 1px solid var(--ui-border); font-size: 11px; padding: 3px 8px; color: var(--ui-muted); }
-.root-error { font-size: 11px; color: #cf222e; white-space: pre-line; flex: 1; }
+#root-go { background: var(--md-accent-color); color: #fff; border-color: var(--md-accent-color); }
+#root-go:hover { filter: brightness(1.08); }
+#root-default { background: var(--ui-bg); color: var(--ui-muted); }
+#root-default:hover { background: var(--ui-hover); }
+.root-error { display: block; margin-top: 6px; font-size: 11px; color: #cf222e; white-space: pre-line; }
 .root-caption { color: var(--ui-muted); display: block; margin-bottom: 2px; }
 
 .tree {
@@ -386,6 +388,11 @@ button:hover { background: var(--ui-hover); }
 .ic-folder i { color: #e0a93b; } /* carpetas — ámbar */
 
 .brand .bi { color: var(--md-accent-color); }
+.version-tag {
+  font-size: 10px; font-weight: 600; color: var(--ui-muted);
+  border: 1px solid var(--ui-border); border-radius: 10px;
+  padding: 1px 7px; margin-left: 2px; vertical-align: middle;
+}
 
 /* Botón "abrir en pestaña" (es un <a> en la topbar) */
 #open-tab-btn {

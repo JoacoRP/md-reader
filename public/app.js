@@ -578,6 +578,7 @@ function throttle(fn, ms) {
 async function boot() {
   MDCore.configureMarked();
   MDConfig.apply(settings);
+  $('#version-tag').textContent = 'v' + MDConfig.VERSION;
   initUI();
   await loadTree();
 

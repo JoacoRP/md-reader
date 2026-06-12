@@ -15,18 +15,16 @@
     <!-- Sidebar -->
     <aside id="sidebar">
       <div class="sidebar-header">
-        <span class="brand"><i class="bi bi-book-half"></i> Markdown Reader</span>
+        <span class="brand"><i class="bi bi-book-half"></i> Markdown Reader <span class="version-tag" id="version-tag"></span></span>
         <button id="collapse-btn" title="Ocultar panel"><i class="bi bi-chevron-left"></i></button>
       </div>
       <div class="root-box">
         <div class="root-row">
           <input type="text" id="root-input" placeholder="C:\ruta\a\carpeta" autocomplete="off" spellcheck="false" />
-          <button id="root-go" title="Usar esta carpeta como raíz"><i class="bi bi-arrow-right-short"></i> Ir</button>
+          <button id="root-go" class="root-icon-btn" title="Usar esta carpeta como raíz"><i class="bi bi-arrow-right"></i></button>
+          <button id="root-default" class="root-icon-btn" title="Volver a la carpeta por defecto"><i class="bi bi-arrow-counterclockwise"></i></button>
         </div>
-        <div class="root-actions">
-          <button id="root-default" title="Volver a la carpeta por defecto"><i class="bi bi-arrow-counterclockwise"></i> Default</button>
-          <span id="root-error" class="root-error"></span>
-        </div>
+        <span id="root-error" class="root-error"></span>
       </div>
       <div class="search-box">
         <div class="search-seg" role="group" aria-label="Modo de búsqueda">

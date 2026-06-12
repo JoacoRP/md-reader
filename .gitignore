@@ -12,6 +12,9 @@ config.json
 # Salida del instalador (electron-builder)
 dist/
 
+# Certificado de firma (privado y público generados) — NO versionar
+build/cert/
+
 # OS / editor
 .DS_Store
 Thumbs.db

@@ -7,25 +7,13 @@ const path = require('path');
 const url = require('url');
 const { spawn } = require('child_process');
 
-// --- CLI parsing -----------------------------------------------------------
-// Usage: node server.js [root] [--port N] [--no-open]
-const argv = process.argv.slice(2);
-let cliRoot = null;
-let cliPort = null;
-let noOpen = false;
-for (let i = 0; i < argv.length; i++) {
-  const a = argv[i];
-  if (a === '--no-open' || a === '-n') noOpen = true;
-  else if (a === '--port' || a === '-p') cliPort = Number(argv[++i]);
-  else if (a.startsWith('--port=')) cliPort = Number(a.slice(7));
-  else if (!a.startsWith('-')) cliRoot = a; // first positional = root
-}
-
-const PORT = cliPort || Number(process.env.MD_PORT) || 4321;
-const NO_OPEN = noOpen || process.env.MD_NO_OPEN === '1';
 const PUBLIC = path.join(__dirname, 'public');
-const CONFIG_FILE = path.join(__dirname, 'config.json');
 const DEFAULT_ROOT = path.resolve(path.join(__dirname, '..'));
+
+// --- Estado a nivel de módulo (un solo server por proceso) ------------------
+let CONFIG_FILE = path.join(__dirname, 'config.json'); // se puede reubicar vía startServer({configDir})
+let currentRoot = DEFAULT_ROOT;     // raíz actual (mutable vía POST /api/root)
+let reportedDefault = DEFAULT_ROOT;  // lo que el botón "⟲ Default" del cliente usa
 
 function isDir(p) {
   try { return fs.statSync(p).isDirectory(); } catch { return false; }
@@ -36,15 +24,6 @@ function loadConfig() {
 function saveConfig(cfg) {
   try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2)); } catch {}
 }
-
-// Root to scan for markdown files. Priority:
-//   1. explicit CLI arg / MD_ROOT env var (always wins, not persisted)
-//   2. last root chosen from the UI (config.json)
-//   3. the parent folder of this app
-// The root is mutable at runtime via POST /api/root.
-const explicitRoot = cliRoot || process.env.MD_ROOT || null;
-let currentRoot = path.resolve(explicitRoot || loadConfig().root || DEFAULT_ROOT);
-if (!isDir(currentRoot)) currentRoot = DEFAULT_ROOT;
 
 const IGNORE_DIRS = new Set([
   'node_modules', '.git', '.svn', 'dist', 'build', 'bin', 'obj',
@@ -168,7 +147,7 @@ function readBody(req) {
   });
 }
 
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
   const parsed = url.parse(req.url, true);
   const pathname = decodeURIComponent(parsed.pathname);
 
@@ -185,15 +164,15 @@ const server = http.createServer(async (req, res) => {
       currentRoot = resolved;
       saveConfig({ ...loadConfig(), root: currentRoot });
       console.log(`  ↳ Root cambiado a: ${currentRoot}`);
-      return sendJSON(res, 200, { root: currentRoot, default: DEFAULT_ROOT });
+      return sendJSON(res, 200, { root: currentRoot, default: reportedDefault });
     }
-    return sendJSON(res, 200, { root: currentRoot, default: DEFAULT_ROOT });
+    return sendJSON(res, 200, { root: currentRoot, default: reportedDefault });
   }
 
   // API: file tree
   if (pathname === '/api/tree') {
     const tree = buildTree(currentRoot, 0) || { type: 'dir', name: currentRoot, path: '', children: [] };
-    return sendJSON(res, 200, { root: currentRoot, default: DEFAULT_ROOT, tree });
+    return sendJSON(res, 200, { root: currentRoot, default: reportedDefault, tree });
   }
 
   // Mocks HTML "con esteroides": se sirven bajo /mock/<ruta> para que sus
@@ -258,7 +237,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(403); return res.end('Forbidden');
   }
   serveStatic(res, fileOnDisk);
-});
+}
 
 // Cross-platform "open this URL in the default browser".
 function openBrowser(target) {
@@ -274,22 +253,70 @@ function openBrowser(target) {
   } catch { /* abrir el browser es best-effort */ }
 }
 
-server.listen(PORT, () => {
-  const link = `http://localhost:${PORT}`;
-  console.log('\n  📖  Markdown Reader');
-  console.log('  ──────────────────────────────────────────');
-  console.log(`  Sirviendo .md desde:  ${currentRoot}`);
-  console.log(`  Abierto en:           ${link}`);
-  console.log('  (Ctrl+C para detener)\n');
-  if (!NO_OPEN) openBrowser(link);
-});
+/**
+ * Arranca el servidor HTTP. Devuelve una promesa con { server, port, root }.
+ * Opciones:
+ *   root        ruta inicial explícita (gana sobre config.json)
+ *   port        puerto (0 = el SO asigna uno libre). Default 4321.
+ *   open        abrir el browser por defecto al arrancar (default true)
+ *   configDir   carpeta donde guardar/leer config.json (default: junto a server.js)
+ *   defaultRoot raíz por defecto si no hay explícita ni guardada, y lo que
+ *               reporta el server como "default" al cliente (default: carpeta padre)
+ */
+function startServer(opts = {}) {
+  const port = opts.port != null ? opts.port : 4321;
+  const open = opts.open !== false;
+  const defaultRoot = opts.defaultRoot ? path.resolve(opts.defaultRoot) : DEFAULT_ROOT;
+  reportedDefault = defaultRoot;
+  if (opts.configDir) CONFIG_FILE = path.join(opts.configDir, 'config.json');
 
-// Si el puerto está ocupado, avisar con claridad en vez de un stack trace.
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`\n  ⚠️  El puerto ${PORT} ya está en uso.`);
-    console.error(`     Probá otro:  node server.js --port ${PORT + 1}\n`);
-    process.exit(1);
+  // Prioridad: root explícita > última guardada (config.json) > defaultRoot.
+  let root = path.resolve(opts.root || loadConfig().root || defaultRoot);
+  if (!isDir(root)) root = isDir(defaultRoot) ? defaultRoot : DEFAULT_ROOT;
+  currentRoot = root;
+
+  return new Promise((resolve, reject) => {
+    const server = http.createServer(handleRequest);
+    server.on('error', reject);
+    // Bind sólo a loopback: la app es estrictamente local.
+    server.listen(port, '127.0.0.1', () => {
+      const actualPort = server.address().port;
+      if (open) openBrowser(`http://127.0.0.1:${actualPort}`);
+      resolve({ server, port: actualPort, root: currentRoot });
+    });
+  });
+}
+
+// --- CLI: `node server.js [root] [--port N] [--no-open]` ---------------------
+if (require.main === module) {
+  const argv = process.argv.slice(2);
+  let cliRoot = null, cliPort = null, noOpen = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--no-open' || a === '-n') noOpen = true;
+    else if (a === '--port' || a === '-p') cliPort = Number(argv[++i]);
+    else if (a.startsWith('--port=')) cliPort = Number(a.slice(7));
+    else if (!a.startsWith('-')) cliRoot = a; // first positional = root
   }
-  throw err;
-});
+  const port = cliPort || Number(process.env.MD_PORT) || 4321;
+  startServer({
+    root: cliRoot || process.env.MD_ROOT || null,
+    port,
+    open: !(noOpen || process.env.MD_NO_OPEN === '1')
+  }).then(({ port, root }) => {
+    console.log('\n  📖  Markdown Reader');
+    console.log('  ──────────────────────────────────────────');
+    console.log(`  Sirviendo .md desde:  ${root}`);
+    console.log(`  Abierto en:           http://127.0.0.1:${port}`);
+    console.log('  (Ctrl+C para detener)\n');
+  }).catch((err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n  ⚠️  El puerto ${port} ya está en uso.`);
+      console.error(`     Probá otro:  node server.js --port ${port + 1}\n`);
+      process.exit(1);
+    }
+    throw err;
+  });
+}
+
+module.exports = { startServer, DEFAULT_ROOT };

@@ -1,14 +1,18 @@
 {
   "name": "md-reader",
   "version": "1.1.0",
-  "description": "Cliente web local para leer archivos Markdown: tablas, Mermaid, resaltado de codigo, TOC y estilos personalizables. Sin dependencias npm, funciona offline.",
+  "description": "Lector local de Markdown y mocks HTML: tablas, Mermaid, resaltado, TOC, edición y estilos personalizables. Funciona como app de Windows o vía CLI.",
   "license": "MIT",
+  "author": "Joaquin Rodriguez",
   "type": "commonjs",
+  "main": "electron/main.js",
   "bin": {
     "md-reader": "server.js"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "app": "electron .",
+    "build:win": "electron-builder --win"
   },
   "engines": {
     "node": ">=16"
@@ -18,6 +22,37 @@
     "viewer",
     "reader",
     "mermaid",
-    "offline"
-  ]
+    "offline",
+    "electron"
+  ],
+  "build": {
+    "appId": "com.joacorp.mdreader",
+    "productName": "Markdown Reader",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "server.js",
+      "electron/**",
+      "public/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Markdown Reader",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "devDependencies": {
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.2"
+  }
 }

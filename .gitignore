@@ -9,6 +9,9 @@ node_modules/
 # Config local (raíz elegida por PC) — no se versiona
 config.json
 
+# Salida del instalador (electron-builder)
+dist/
+
 # OS / editor
 .DS_Store
 Thumbs.db

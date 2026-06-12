@@ -368,6 +368,21 @@ button:hover { background: var(--ui-hover); }
 #open-tab-btn:hover { background: var(--ui-hover); }
 .badge-html { color: #e44d26; font-weight: 600; }
 
+/* ---------- Botón de toggle activo (raw) ---------- */
+.topbar-actions button.active-toggle {
+  background: var(--ui-active);
+  border-color: var(--md-accent-color);
+  color: var(--md-accent-color);
+}
+
+/* ---------- Vista original (raw) ---------- */
+.markdown-body .raw-view {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+.markdown-body .raw-view code { font-size: var(--md-code-font-size); }
+
 /* ---------- Vista de mock HTML (iframe) ---------- */
 .markdown-body.mock-view {
   max-width: none; padding: 0; width: 100%;

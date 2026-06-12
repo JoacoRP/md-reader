@@ -97,6 +97,7 @@ Los `.md` y `.html` se distinguen en el árbol por **íconos** (Bootstrap Icons)
 - **Renderizado GFM**: tablas, listas de tareas, citas, código.
 - **Mermaid**: los bloques ```` ```mermaid ```` se dibujan como diagramas.
 - **Resaltado de sintaxis** (highlight.js) con botón _Copiar_ en cada bloque.
+- **Toggle original / formateado** (botón `</>`): alterna entre la versión renderizada y el **código fuente** (raw) del archivo. Aplica a Markdown (muestra el `.md` crudo) y a los mocks HTML (muestra el HTML en vez del iframe). La preferencia se recuerda entre archivos.
 - **Tabla de contenidos** flotante con seguimiento de scroll.
 - **Configuración** en página aparte con preview en vivo (ver arriba) + **tema claro/oscuro** rápido desde el lector.
 - Preferencias persistidas en `localStorage`.

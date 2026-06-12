@@ -39,7 +39,7 @@ function enhanceContent() {
     } else if (/\.(md|markdown|mdx)$/i.test(href)) {
       a.addEventListener('click', (e) => {
         e.preventDefault();
-        loadFile(resolveRelative(currentPath, href));
+        openFile(resolveRelative(currentPath, href));
       });
     }
   });
@@ -135,13 +135,17 @@ async function changeRoot(newPath) {
     if (!res.ok) { errEl.textContent = data.error || 'No se pudo cambiar la raíz.'; return; }
     // El archivo abierto pertenecía a la raíz anterior: limpiar la vista.
     currentPath = null;
+    currentContent = null;
     location.hash = '';
     document.title = 'Markdown Reader';
     breadcrumbEl.textContent = '';
     fileMetaEl.textContent = '';
     tocEl.classList.add('hidden');
-    contentEl.innerHTML = '<div class="empty-state"><h1>📂 Raíz actualizada</h1>' +
-      `<p>Mostrando los <code>.md</code> bajo:</p><p class="hint">${data.root}</p>` +
+    contentEl.classList.remove('mock-view');
+    $('#raw-btn').classList.add('hidden');
+    $('#open-tab-btn').classList.add('hidden');
+    contentEl.innerHTML = '<div class="empty-state"><h1><i class="bi bi-folder2-open"></i> Raíz actualizada</h1>' +
+      `<p>Mostrando los <code>.md</code> / <code>.html</code> bajo:</p><p class="hint">${data.root}</p>` +
       '<p class="hint">Elegí un archivo del panel izquierdo.</p></div>';
     $('#search').value = '';
     await loadTree();
@@ -236,17 +240,12 @@ function filterTree(query) {
 
 /* ============================ Load a file ============================ */
 let currentKind = 'md';
+let currentContent = null;   // texto crudo del archivo actual (cacheado)
+let currentMtime = 0;
+let rawMode = localStorage.getItem('md-reader-raw') === '1';
 
 function inferKind(path) {
   return /\.(html?|htm)$/i.test(path) ? 'html' : 'md';
-}
-
-// Despacha según el tipo: markdown se renderiza, HTML se embebe en un iframe.
-function openFile(path, kind) {
-  if (!path) return;
-  kind = kind || inferKind(path);
-  if (kind === 'html') return showHtmlMock(path);
-  return loadFile(path);
 }
 
 // Construye la URL /mock/ preservando los separadores de carpeta.
@@ -254,44 +253,111 @@ function mockUrl(path) {
   return '/mock/' + path.split('/').map(encodeURIComponent).join('/');
 }
 
-async function loadFile(path) {
+// Abre un archivo: fija estado común y delega el render al modo actual.
+async function openFile(path, kind) {
   if (!path) return;
   currentPath = path;
-  currentKind = 'md';
-  contentEl.classList.remove('mock-view');
-  $('#open-tab-btn').classList.add('hidden');
-  try {
-    const res = await fetch('/api/file?path=' + encodeURIComponent(path));
-    if (!res.ok) throw new Error('No se pudo cargar el archivo');
-    const data = await res.json();
-    await renderMarkdown(data.content);
-    updateBreadcrumb(path);
-    fileMetaEl.textContent = formatMeta(data.content, data.mtime);
-    setActiveInTree(path);
-    document.title = path.split('/').pop() + ' — Markdown Reader';
-    location.hash = encodeURIComponent(path);
-  } catch (err) {
-    contentEl.innerHTML = `<div class="mermaid-error">⚠️ ${err.message}</div>`;
-  }
-}
-
-// Muestra un mock HTML "con esteroides" embebido en un iframe.
-function showHtmlMock(path) {
-  currentPath = path;
-  currentKind = 'html';
-  const url = mockUrl(path);
-  contentEl.classList.add('mock-view');
-  contentEl.innerHTML = `<iframe class="mock-frame" src="${url}" title="${path}"></iframe>`;
-  tocEl.classList.add('hidden');
-  tocLinks = [];
+  currentKind = kind || inferKind(path);
+  currentContent = null;
+  currentMtime = 0;
+  $('#raw-btn').classList.remove('hidden');
   updateBreadcrumb(path);
-  fileMetaEl.innerHTML = '<span class="badge-html"><i class="bi bi-filetype-html"></i> Mock HTML</span>';
-  const openBtn = $('#open-tab-btn');
-  openBtn.href = url;
-  openBtn.classList.remove('hidden');
   setActiveInTree(path);
   document.title = path.split('/').pop() + ' — Markdown Reader';
   location.hash = encodeURIComponent(path);
+  await renderCurrent();
+}
+
+// Trae el contenido crudo del archivo (markdown vía API, html vía /mock/).
+async function ensureContent() {
+  if (currentContent != null) return true;
+  try {
+    if (currentKind === 'html') {
+      const res = await fetch(mockUrl(currentPath));
+      if (!res.ok) throw new Error('No se pudo cargar el archivo');
+      currentContent = await res.text();
+    } else {
+      const res = await fetch('/api/file?path=' + encodeURIComponent(currentPath));
+      if (!res.ok) throw new Error('No se pudo cargar el archivo');
+      const data = await res.json();
+      currentContent = data.content;
+      currentMtime = data.mtime;
+    }
+    return true;
+  } catch (err) {
+    contentEl.classList.remove('mock-view');
+    contentEl.innerHTML = `<div class="mermaid-error">⚠️ ${err.message}</div>`;
+    return false;
+  }
+}
+
+// Renderiza el archivo actual respetando el tipo (md/html) y el modo (formateado/raw).
+async function renderCurrent() {
+  updateRawButton();
+
+  // HTML formateado → iframe (no necesita traer el contenido).
+  if (currentKind === 'html' && !rawMode) {
+    contentEl.classList.add('mock-view');
+    contentEl.innerHTML = `<iframe class="mock-frame" src="${mockUrl(currentPath)}" title="${currentPath}"></iframe>`;
+    tocEl.classList.add('hidden'); tocLinks = [];
+    fileMetaEl.innerHTML = '<span class="badge-html"><i class="bi bi-filetype-html"></i> Mock HTML</span>';
+    showOpenTab(true);
+    contentEl.parentElement.scrollTop = 0;
+    return;
+  }
+
+  if (!(await ensureContent())) return;
+  contentEl.classList.remove('mock-view');
+
+  if (currentKind === 'html') {            // HTML en modo raw
+    renderRaw(currentContent, 'xml');
+    tocEl.classList.add('hidden'); tocLinks = [];
+    fileMetaEl.innerHTML = '<span class="badge-html"><i class="bi bi-filetype-html"></i> Mock HTML · original</span>';
+    showOpenTab(true);
+    return;
+  }
+
+  showOpenTab(false);
+  if (rawMode) {                           // Markdown en modo raw
+    renderRaw(currentContent, 'markdown');
+    tocEl.classList.add('hidden'); tocLinks = [];
+    fileMetaEl.textContent = formatMeta(currentContent, currentMtime) + ' · original';
+  } else {                                 // Markdown formateado
+    await renderMarkdown(currentContent);
+    fileMetaEl.textContent = formatMeta(currentContent, currentMtime);
+  }
+}
+
+// Muestra texto crudo como bloque de código (con resaltado si hay lenguaje).
+function renderRaw(text, lang) {
+  let highlighted, used = lang;
+  try {
+    if (lang && window.hljs && hljs.getLanguage(lang)) {
+      highlighted = hljs.highlight(text, { language: lang }).value;
+    } else {
+      highlighted = MDCore.escapeHtml(text);
+    }
+  } catch {
+    highlighted = MDCore.escapeHtml(text);
+  }
+  contentEl.innerHTML =
+    `<pre class="raw-view"><button class="copy-code">Copiar</button>` +
+    `<code class="hljs language-${used}">${highlighted}</code></pre>`;
+  MDCore.attachCopyButtons(contentEl);
+  contentEl.parentElement.scrollTop = 0;
+}
+
+function showOpenTab(show) {
+  const b = $('#open-tab-btn');
+  if (show) { b.href = mockUrl(currentPath); b.classList.remove('hidden'); }
+  else b.classList.add('hidden');
+}
+
+function updateRawButton() {
+  const b = $('#raw-btn');
+  b.innerHTML = rawMode ? '<i class="bi bi-file-richtext"></i>' : '<i class="bi bi-code-slash"></i>';
+  b.title = rawMode ? 'Ver formateado' : 'Ver original (raw)';
+  b.classList.toggle('active-toggle', rawMode);
 }
 
 function updateBreadcrumb(path) {
@@ -342,7 +408,7 @@ function initUI() {
     const preset = MDConfig.PRESETS[next === 'dark' ? 'night' : 'default'];
     Object.assign(settings, preset, { theme: next });
     MDConfig.apply(settings); MDConfig.save(settings);
-    if (currentPath && currentKind === 'md') loadFile(currentPath); // re-render mermaid
+    if (currentPath && currentKind === 'md') renderCurrent(); // re-render mermaid
   });
 
   // TOC toggle
@@ -352,6 +418,14 @@ function initUI() {
     btn.dataset.on = off ? 'on' : 'off';
     if (off && tocLinks.length) tocEl.classList.remove('hidden');
     else tocEl.classList.add('hidden');
+  });
+
+  // Raw / formateado
+  $('#raw-btn').addEventListener('click', () => {
+    rawMode = !rawMode;
+    localStorage.setItem('md-reader-raw', rawMode ? '1' : '0');
+    if (currentPath) renderCurrent();
+    else updateRawButton();
   });
 
   // Print
@@ -376,7 +450,7 @@ function initUI() {
     if (e.key === MDConfig.STORAGE_KEY) {
       settings = MDConfig.load();
       MDConfig.apply(settings);
-      if (currentPath && currentKind === 'md') loadFile(currentPath);
+      if (currentPath && currentKind === 'md') renderCurrent();
     }
   });
 }

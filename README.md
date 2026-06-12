@@ -154,8 +154,9 @@ Esto deja:
 - `build\cert\md-reader.pfx` — **privado**, firma la app. **No compartir, no commitear** (está gitignored).
 - `build\cert\md-reader.cer` — **público**, se distribuye al equipo.
 - `dist\Markdown Reader Setup x.y.z.exe` — instalador **firmado**.
+- **`dist\Markdown-Reader-x.y.z.zip`** — **paquete listo para compartir**: el `build-signed.ps1` arma automáticamente un zip con el Setup + el `.cer` + los scripts de confianza + un `LEEME.txt`. **Eso es lo único que les pasás a los compañeros**; corren `Confiar-MarkdownReader.cmd` una vez (ver [Instalar como app](#instalar-como-app-de-windows-sin-node)).
 
-**Para distribuir**, entregá juntos (carpeta o zip): el **Setup .exe** + **`build\cert\md-reader.cer`** + **`tools\Confiar-MarkdownReader.cmd`** (y `Confiar-MarkdownReader.ps1`). El compañero corre el `.cmd` una vez (ver [Instalar como app](#instalar-como-app-de-windows-sin-node)).
+> El zip también se puede regenerar suelto con `.\tools\package-dist.ps1` (sin recompilar). Si compilaste sin firmar (`npm run build:win`), el zip sale igual pero sin el cert ni el script, con instrucciones de "Desbloquear" en el `LEEME.txt`.
 
 > Seguridad: el `.pfx` es la identidad de firma — guardalo bien. Si se filtra, regenerá el cert (`make-cert.ps1`) y los compañeros vuelven a confiar el nuevo `.cer`. El certificado dura 10 años.
 
@@ -172,7 +173,8 @@ md-reader/
 │  └─ icon.ico        # ícono de la app / instalador  (build/cert/ es gitignored)
 ├─ tools/
 │  ├─ make-cert.ps1               # genera el certificado self-signed (dev)
-│  ├─ build-signed.ps1            # compila el instalador firmado (dev)
+│  ├─ build-signed.ps1            # compila el instalador firmado + arma el zip (dev)
+│  ├─ package-dist.ps1            # arma el zip de distribución (dev)
 │  ├─ Confiar-MarkdownReader.ps1  # el equipo confía el editor + desbloquea
 │  └─ Confiar-MarkdownReader.cmd  # wrapper doble-clic del anterior
 ├─ start.cmd          # launcher Windows (doble-clic / cmd)

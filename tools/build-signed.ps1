@@ -20,6 +20,7 @@ $env:CSC_KEY_PASSWORD = $Password
 Push-Location $root
 try {
   npx electron-builder --win
+  if ($LASTEXITCODE -ne 0) { throw "electron-builder fallo (exit $LASTEXITCODE)" }
 } finally {
   Pop-Location
   Remove-Item Env:CSC_LINK         -ErrorAction SilentlyContinue
@@ -28,7 +29,6 @@ try {
 
 Write-Host ""
 Write-Host "Instalador firmado en dist\." -ForegroundColor Green
-Write-Host "Para el equipo, entregales JUNTOS estos 3 (carpeta o zip):" -ForegroundColor Cyan
-Write-Host "  - dist\Markdown Reader Setup x.y.z.exe"
-Write-Host "  - build\cert\md-reader.cer"
-Write-Host "  - tools\Confiar-MarkdownReader.cmd  (+ Confiar-MarkdownReader.ps1)"
+
+# Arma el zip de distribucion (Setup + cert + scripts de confianza + LEEME).
+& (Join-Path $PSScriptRoot 'package-dist.ps1')

@@ -176,8 +176,8 @@ function renderNode(node, depth) {
   }
 
   const div = document.createElement('div');
-  div.className = 'tree-node tree-dir';
-  if (depth >= 1) div.classList.add('collapsed'); // top-level expanded, deeper collapsed
+  div.className = 'tree-node tree-dir collapsed'; // todas las carpetas arrancan colapsadas
+  div.dataset.name = node.name.toLowerCase();
   const label = document.createElement('div');
   label.className = 'tree-label';
   label.innerHTML = `<span class="twisty">▶</span><span class="icon ic-folder"><i class="bi bi-folder-fill"></i></span><span class="name">${node.name}</span>`;
@@ -185,7 +185,6 @@ function renderNode(node, depth) {
     div.classList.toggle('collapsed');
     label.querySelector('.twisty').textContent = div.classList.contains('collapsed') ? '▶' : '▼';
   });
-  if (!div.classList.contains('collapsed')) label.querySelector('.twisty').textContent = '▼';
   div.appendChild(label);
 
   const childWrap = document.createElement('div');
@@ -216,12 +215,33 @@ function setActiveInTree(path) {
 function cssEscape(s) { return s.replace(/["\\]/g, '\\$&'); }
 
 /* ============================ Search filter ============================ */
+let searchMode = 'files'; // 'files' | 'folders'
+
+function collapseDir(d, collapsed) {
+  d.classList.toggle('collapsed', collapsed);
+  const tw = d.querySelector(':scope > .tree-label .twisty');
+  if (tw) tw.textContent = collapsed ? '▶' : '▼';
+}
+
+function setSearchMode(mode) {
+  searchMode = mode;
+  $('#mode-files').classList.toggle('active', mode === 'files');
+  $('#mode-folders').classList.toggle('active', mode === 'folders');
+  $('#search').placeholder = mode === 'files' ? 'Buscar archivo…' : 'Buscar carpeta…';
+  filterTree($('#search').value);
+}
+
 function filterTree(query) {
+  if (searchMode === 'folders') return filterFolders(query);
+  return filterFiles(query);
+}
+
+function filterFiles(query) {
   const q = query.trim().toLowerCase();
   const files = treeEl.querySelectorAll('.tree-file');
   if (!q) {
     files.forEach((f) => f.classList.remove('hidden'));
-    treeEl.querySelectorAll('.tree-dir').forEach((d) => d.classList.remove('hidden'));
+    treeEl.querySelectorAll('.tree-dir').forEach((d) => { d.classList.remove('hidden'); collapseDir(d, true); });
     return;
   }
   files.forEach((f) => {
@@ -230,12 +250,42 @@ function filterTree(query) {
   treeEl.querySelectorAll('.tree-dir').forEach((d) => {
     const visibleFiles = d.querySelectorAll('.tree-file:not(.hidden)').length;
     d.classList.toggle('hidden', visibleFiles === 0);
-    if (visibleFiles > 0) {
-      d.classList.remove('collapsed');
-      const tw = d.querySelector(':scope > .tree-label .twisty');
-      if (tw) tw.textContent = '▼';
-    }
+    if (visibleFiles > 0) collapseDir(d, false);
   });
+}
+
+// Búsqueda por carpeta: revela las carpetas cuyo nombre matchea, su contenido
+// directo (para ver el README, por ejemplo) y la cadena de ancestros.
+function filterFolders(query) {
+  const q = query.trim().toLowerCase();
+  const dirs = treeEl.querySelectorAll('.tree-dir');
+  const files = treeEl.querySelectorAll('.tree-file');
+  if (!q) {
+    files.forEach((f) => f.classList.remove('hidden'));
+    dirs.forEach((d) => { d.classList.remove('hidden'); collapseDir(d, true); });
+    return;
+  }
+  dirs.forEach((d) => d.classList.add('hidden'));
+  files.forEach((f) => f.classList.add('hidden'));
+  dirs.forEach((d) => {
+    if ((d.dataset.name || '').includes(q)) revealDir(d);
+  });
+}
+
+function revealDir(d) {
+  d.classList.remove('hidden');
+  collapseDir(d, false); // expandir la carpeta encontrada
+  // contenido (descendientes): visibles; subcarpetas colapsadas
+  d.querySelectorAll('.tree-node').forEach((n) => {
+    n.classList.remove('hidden');
+    if (n.classList.contains('tree-dir')) collapseDir(n, true);
+  });
+  // cadena de ancestros: visible y expandida para que sea alcanzable
+  let p = d.parentElement;
+  while (p && p !== treeEl) {
+    if (p.classList.contains('tree-dir')) { p.classList.remove('hidden'); collapseDir(p, false); }
+    p = p.parentElement;
+  }
 }
 
 /* ============================ Load a file ============================ */
@@ -243,6 +293,7 @@ let currentKind = 'md';
 let currentContent = null;   // texto crudo del archivo actual (cacheado)
 let currentMtime = 0;
 let rawMode = localStorage.getItem('md-reader-raw') === '1';
+let rawEditorEl = null;      // <textarea> del editor raw cuando está activo
 
 function inferKind(path) {
   return /\.(html?|htm)$/i.test(path) ? 'html' : 'md';
@@ -256,10 +307,12 @@ function mockUrl(path) {
 // Abre un archivo: fija estado común y delega el render al modo actual.
 async function openFile(path, kind) {
   if (!path) return;
+  await flushRawEdits(); // autosave de ediciones pendientes del archivo anterior
   currentPath = path;
   currentKind = kind || inferKind(path);
   currentContent = null;
   currentMtime = 0;
+  rawEditorEl = null;
   $('#raw-btn').classList.remove('hidden');
   updateBreadcrumb(path);
   setActiveInTree(path);
@@ -294,6 +347,7 @@ async function ensureContent() {
 // Renderiza el archivo actual respetando el tipo (md/html) y el modo (formateado/raw).
 async function renderCurrent() {
   updateRawButton();
+  if (!rawMode) { rawEditorEl = null; setSaveStatus('hidden'); }
 
   // HTML formateado → iframe (no necesita traer el contenido).
   if (currentKind === 'html' && !rawMode) {
@@ -309,42 +363,84 @@ async function renderCurrent() {
   if (!(await ensureContent())) return;
   contentEl.classList.remove('mock-view');
 
-  if (currentKind === 'html') {            // HTML en modo raw
-    renderRaw(currentContent, 'xml');
+  if (rawMode) {                           // Editor de código (md o html)
+    renderRawEditor(currentContent);
     tocEl.classList.add('hidden'); tocLinks = [];
-    fileMetaEl.innerHTML = '<span class="badge-html"><i class="bi bi-filetype-html"></i> Mock HTML · original</span>';
-    showOpenTab(true);
+    showOpenTab(currentKind === 'html');
+    if (currentKind === 'html') {
+      fileMetaEl.innerHTML = '<span class="badge-html"><i class="bi bi-filetype-html"></i> Mock HTML · editando</span>';
+    } else {
+      fileMetaEl.textContent = formatMeta(currentContent, currentMtime) + ' · editando';
+    }
     return;
   }
 
+  // Markdown formateado
   showOpenTab(false);
-  if (rawMode) {                           // Markdown en modo raw
-    renderRaw(currentContent, 'markdown');
-    tocEl.classList.add('hidden'); tocLinks = [];
-    fileMetaEl.textContent = formatMeta(currentContent, currentMtime) + ' · original';
-  } else {                                 // Markdown formateado
-    await renderMarkdown(currentContent);
-    fileMetaEl.textContent = formatMeta(currentContent, currentMtime);
+  await renderMarkdown(currentContent);
+  fileMetaEl.textContent = formatMeta(currentContent, currentMtime);
+}
+
+// Editor de texto crudo (textarea). Edición libre; el guardado es automático
+// al volver a la vista formateada / cambiar de archivo / cerrar.
+function renderRawEditor(text) {
+  contentEl.innerHTML = '<textarea class="raw-editor" spellcheck="false"></textarea>';
+  rawEditorEl = contentEl.querySelector('.raw-editor');
+  rawEditorEl.value = text;
+  setSaveStatus('clean');
+  rawEditorEl.addEventListener('input', () => {
+    setSaveStatus(rawEditorEl.value !== currentContent ? 'dirty' : 'clean');
+  });
+  // Ctrl/Cmd+S fuerza el guardado sin salir del editor.
+  rawEditorEl.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault(); flushRawEdits();
+    }
+  });
+  contentEl.parentElement.scrollTop = 0;
+}
+
+// Guarda las ediciones del editor raw si hay cambios. Devuelve una promesa.
+async function flushRawEdits() {
+  if (!rawMode || !rawEditorEl || !currentPath) return;
+  const val = rawEditorEl.value;
+  if (val === currentContent) return;
+  setSaveStatus('saving');
+  try {
+    const res = await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: currentPath, content: val })
+    });
+    const data = await res.json();
+    if (res.ok) { currentContent = val; currentMtime = data.mtime; setSaveStatus('saved'); }
+    else { setSaveStatus('error'); }
+  } catch {
+    setSaveStatus('error');
   }
 }
 
-// Muestra texto crudo como bloque de código (con resaltado si hay lenguaje).
-function renderRaw(text, lang) {
-  let highlighted, used = lang;
-  try {
-    if (lang && window.hljs && hljs.getLanguage(lang)) {
-      highlighted = hljs.highlight(text, { language: lang }).value;
-    } else {
-      highlighted = MDCore.escapeHtml(text);
-    }
-  } catch {
-    highlighted = MDCore.escapeHtml(text);
-  }
-  contentEl.innerHTML =
-    `<pre class="raw-view"><button class="copy-code">Copiar</button>` +
-    `<code class="hljs language-${used}">${highlighted}</code></pre>`;
-  MDCore.attachCopyButtons(contentEl);
-  contentEl.parentElement.scrollTop = 0;
+function setSaveStatus(state) {
+  const el = $('#save-status');
+  if (!el) return;
+  const map = {
+    hidden: ['', ''],
+    clean: ['', ''],
+    dirty: ['save-dirty', '<i class="bi bi-pencil-fill"></i> sin guardar'],
+    saving: ['save-dirty', '<i class="bi bi-arrow-repeat"></i> guardando…'],
+    saved: ['save-ok', '<i class="bi bi-check-circle-fill"></i> guardado'],
+    error: ['save-err', '<i class="bi bi-exclamation-triangle-fill"></i> error al guardar']
+  };
+  const [cls, html] = map[state] || map.hidden;
+  el.className = 'save-status ' + cls;
+  el.innerHTML = html;
+  el.classList.toggle('hidden', !html);
+}
+
+function showOpenTab(show) {
+  const b = $('#open-tab-btn');
+  if (show) { b.href = mockUrl(currentPath); b.classList.remove('hidden'); }
+  else b.classList.add('hidden');
 }
 
 function showOpenTab(show) {
@@ -390,8 +486,10 @@ function initUI() {
     $('#expand-btn').classList.add('hidden');
   });
 
-  // Search
+  // Search + modo (archivos / carpetas)
   $('#search').addEventListener('input', (e) => filterTree(e.target.value));
+  $('#mode-files').addEventListener('click', () => setSearchMode('files'));
+  $('#mode-folders').addEventListener('click', () => setSearchMode('folders'));
 
   // Root selector
   $('#root-go').addEventListener('click', () => changeRoot($('#root-input').value));
@@ -420,12 +518,24 @@ function initUI() {
     else tocEl.classList.add('hidden');
   });
 
-  // Raw / formateado
-  $('#raw-btn').addEventListener('click', () => {
+  // Raw / formateado (con autosave al volver a formateado)
+  $('#raw-btn').addEventListener('click', async () => {
+    if (rawMode) await flushRawEdits(); // estamos saliendo del editor → guardar
     rawMode = !rawMode;
     localStorage.setItem('md-reader-raw', rawMode ? '1' : '0');
-    if (currentPath) renderCurrent();
+    if (currentPath) await renderCurrent();
     else updateRawButton();
+  });
+
+  // Red de seguridad: guardar ediciones pendientes al cerrar/recargar.
+  window.addEventListener('beforeunload', () => {
+    if (rawMode && rawEditorEl && currentPath && rawEditorEl.value !== currentContent) {
+      const blob = new Blob(
+        [JSON.stringify({ path: currentPath, content: rawEditorEl.value })],
+        { type: 'application/json' }
+      );
+      navigator.sendBeacon('/api/save', blob);
+    }
   });
 
   // Print

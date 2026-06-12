@@ -29,7 +29,10 @@
         </div>
       </div>
       <div class="search-box">
-        <i class="bi bi-search search-icon"></i>
+        <div class="search-seg" role="group" aria-label="Modo de búsqueda">
+          <button id="mode-files" class="seg-btn active" title="Buscar archivos"><i class="bi bi-file-earmark-text"></i></button>
+          <button id="mode-folders" class="seg-btn" title="Buscar carpetas"><i class="bi bi-folder"></i></button>
+        </div>
         <input type="text" id="search" placeholder="Buscar archivo…" autocomplete="off" />
       </div>
       <div id="tree" class="tree"></div>
@@ -45,6 +48,7 @@
         <button id="expand-btn" title="Mostrar panel" class="hidden"><i class="bi bi-list"></i></button>
         <div id="breadcrumb"></div>
         <div class="topbar-actions">
+          <span id="save-status" class="save-status hidden"></span>
           <span id="file-meta"></span>
           <a id="open-tab-btn" class="hidden" title="Abrir mock en pestaña nueva" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i></a>
           <button id="raw-btn" class="hidden" title="Ver original (raw)"><i class="bi bi-code-slash"></i></button>

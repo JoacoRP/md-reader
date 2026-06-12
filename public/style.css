@@ -345,12 +345,40 @@ button:hover { background: var(--ui-hover); }
 .toc a.lvl-4 { padding-left: 40px; font-size: 12px; }
 
 /* ---------- Iconos / tipos de archivo ---------- */
-.search-box { position: relative; }
-.search-icon {
-  position: absolute; left: 21px; top: 50%; transform: translateY(-50%);
-  color: var(--ui-muted); font-size: 13px; pointer-events: none;
+.search-box { display: flex; align-items: center; gap: 6px; }
+.search-box #search { flex: 1; min-width: 0; }
+.search-seg { display: inline-flex; border: 1px solid var(--ui-border); border-radius: 6px; overflow: hidden; }
+.seg-btn {
+  border: 0; border-radius: 0; padding: 6px 9px; font-size: 13px;
+  color: var(--ui-muted); background: var(--ui-bg);
 }
-.search-box #search { padding-left: 30px; }
+.seg-btn + .seg-btn { border-left: 1px solid var(--ui-border); }
+.seg-btn.active { background: var(--md-accent-color); color: #fff; }
+.seg-btn:hover:not(.active) { background: var(--ui-hover); }
+
+/* ---------- Indicador de guardado ---------- */
+.save-status { font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
+.save-status.save-dirty { color: var(--ui-muted); }
+.save-status.save-ok { color: #1a7f37; }
+.save-status.save-err { color: #cf222e; }
+
+/* ---------- Editor raw (textarea) ---------- */
+.markdown-body .raw-editor {
+  width: 100%;
+  min-height: calc(100vh - 160px);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: var(--md-code-font-size);
+  line-height: 1.55;
+  color: var(--md-text-color);
+  background: color-mix(in srgb, var(--md-text-color) 3%, var(--md-bg-color));
+  resize: vertical;
+  outline: none;
+  tab-size: 2;
+}
+.markdown-body .raw-editor:focus { border-color: var(--md-accent-color); }
 
 .tree-label .icon { display: inline-flex; align-items: center; font-size: 15px; }
 .ic-md i { color: #4577c0; }     /* markdown — azul */
@@ -374,14 +402,6 @@ button:hover { background: var(--ui-hover); }
   border-color: var(--md-accent-color);
   color: var(--md-accent-color);
 }
-
-/* ---------- Vista original (raw) ---------- */
-.markdown-body .raw-view {
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-}
-.markdown-body .raw-view code { font-size: var(--md-code-font-size); }
 
 /* ---------- Vista de mock HTML (iframe) ---------- */
 .markdown-body.mock-view {

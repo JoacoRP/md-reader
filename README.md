@@ -98,6 +98,9 @@ Los `.md` y `.html` se distinguen en el árbol por **íconos** (Bootstrap Icons)
 - **Mermaid**: los bloques ```` ```mermaid ```` se dibujan como diagramas.
 - **Resaltado de sintaxis** (highlight.js) con botón _Copiar_ en cada bloque.
 - **Toggle original / formateado** (botón `</>`): alterna entre la versión renderizada y el **código fuente** (raw) del archivo. Aplica a Markdown (muestra el `.md` crudo) y a los mocks HTML (muestra el HTML en vez del iframe). La preferencia se recuerda entre archivos.
+- **Edición en la vista raw con autosave**: el modo original es un editor; los cambios se **guardan automáticamente** al volver a la vista formateada, al cambiar de archivo o al cerrar (también con `Ctrl/Cmd+S`). Un indicador en la topbar muestra el estado (sin guardar / guardado).
+- **Carpetas colapsadas** por defecto.
+- **Buscador con modo archivos / carpetas**: un switch permite buscar por nombre de archivo o por nombre de carpeta (útil cuando querés, por ejemplo, el `README` de una carpeta puntual: la encontrás y se revela con su contenido).
 - **Tabla de contenidos** flotante con seguimiento de scroll.
 - **Configuración** en página aparte con preview en vivo (ver arriba) + **tema claro/oscuro** rápido desde el lector.
 - Preferencias persistidas en `localStorage`.

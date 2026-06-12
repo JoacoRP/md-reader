@@ -220,6 +220,27 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: save edited content back to a file (markdown o html).
+  if (pathname === '/api/save' && req.method === 'POST') {
+    const body = await readBody(req);
+    const rel = String(body.path || '');
+    const target = safeResolve(rel);
+    if (!target) return sendJSON(res, 400, { error: 'Invalid path' });
+    if (!fileKind(path.basename(target))) {
+      return sendJSON(res, 400, { error: 'Tipo de archivo no editable' });
+    }
+    if (typeof body.content !== 'string') {
+      return sendJSON(res, 400, { error: 'Contenido inválido' });
+    }
+    try {
+      fs.writeFileSync(target, body.content, 'utf8');
+      const mtime = fs.statSync(target).mtimeMs;
+      return sendJSON(res, 200, { path: rel, mtime });
+    } catch (err) {
+      return sendJSON(res, 500, { error: 'No se pudo guardar: ' + err.message });
+    }
+  }
+
   // API: serve a raw asset (e.g. images) referenced relative to ROOT
   if (pathname === '/api/raw') {
     const rel = parsed.query.path || '';

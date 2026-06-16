@@ -12,8 +12,12 @@ const DEFAULT_ROOT = path.resolve(path.join(__dirname, '..'));
 
 // --- Estado a nivel de módulo (un solo server por proceso) ------------------
 let CONFIG_FILE = path.join(__dirname, 'config.json'); // se puede reubicar vía startServer({configDir})
-let currentRoot = DEFAULT_ROOT;     // raíz actual (mutable vía POST /api/root)
+let currentRoot = DEFAULT_ROOT;     // raíz del lector (mutable vía POST /api/root)
+let notesRoot = DEFAULT_ROOT;        // raíz de Note Taker (carpeta de notas, vía Settings)
 let reportedDefault = DEFAULT_ROOT;  // lo que el botón "⟲ Default" del cliente usa
+
+// Raíz activa según la sub-app que hace el request.
+function rootFor(app) { return app === 'notes' ? notesRoot : currentRoot; }
 
 function isDir(p) {
   try { return fs.statSync(p).isDirectory(); } catch { return false; }
@@ -24,6 +28,67 @@ function loadConfig() {
 function saveConfig(cfg) {
   try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2)); } catch {}
 }
+
+// Lee un .env simple (KEY=value o KEY:'value'). Sin dependencias.
+function loadEnvFile() {
+  const out = {};
+  try {
+    const txt = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
+    for (const line of txt.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t || t.startsWith('#')) continue;
+      const m = t.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*[:=]\s*(.*)$/);
+      if (!m) continue;
+      out[m[1]] = m[2].trim().replace(/^['"]|['"]$/g, '');
+    }
+  } catch {}
+  return out;
+}
+function isTruthy(v) { return /^(true|1|yes|on)$/i.test(String(v || '').trim()); }
+
+// Plantillas sembradas la primera vez en <carpeta de notas>/templates/.
+const SEED_DAILY = `# Daily {{date}}
+
+**Líderes de reunión:**
+-
+
+## Mío
+**Done:**
+-
+
+**Todo:**
+-
+
+**Dudas/Consultas:**
+-
+
+## Orden ({{time}})
+-
+
+## Ausencias
+-
+
+## Notas
+-
+`;
+const SEED_MEETING = `# Reunión — {{date}}
+
+**Fecha:** {{date}}
+**Hora:** {{time}}
+**Lugar / Canal:**
+
+## Participantes
+-
+
+## Temas
+-
+
+## Decisiones
+-
+
+## Acciones
+- [ ] Acción — responsable — fecha límite
+`;
 
 const IGNORE_DIRS = new Set([
   'node_modules', '.git', '.svn', 'dist', 'build', 'bin', 'obj',
@@ -57,12 +122,15 @@ const MIME = {
 function fileKind(name) {
   if (/\.(md|markdown|mdx)$/i.test(name)) return 'md';
   if (/\.(html?|htm)$/i.test(name)) return 'html';
+  if (/\.txt$/i.test(name)) return 'txt';
   return null;
 }
 
-// Recursively build a tree of folders containing supported files (md + html).
-function buildTree(dir, depth) {
+// Recursively build a tree of folders containing supported files.
+// includeTxt: los .txt solo se indexan en la app Note Taker.
+function buildTree(dir, depth, includeTxt, root) {
   if (depth > 12) return null;
+  root = root || currentRoot;
   let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -78,18 +146,19 @@ function buildTree(dir, depth) {
 
     if (ent.isDirectory()) {
       if (IGNORE_DIRS.has(name.toLowerCase())) continue;
-      const sub = buildTree(full, depth + 1);
+      const sub = buildTree(full, depth + 1, includeTxt, root);
       if (sub && sub.children.length) children.push(sub);
     } else if (ent.isFile()) {
       const kind = fileKind(name);
       if (!kind) continue;
+      if (kind === 'txt' && !includeTxt) continue; // .txt solo en Note Taker
       let size = 0, mtime = 0;
       try { const st = fs.statSync(full); size = st.size; mtime = st.mtimeMs; } catch {}
       children.push({
         type: 'file',
         kind,
         name,
-        path: path.relative(currentRoot, full).split(path.sep).join('/'),
+        path: path.relative(root, full).split(path.sep).join('/'),
         size,
         mtime
       });
@@ -105,16 +174,16 @@ function buildTree(dir, depth) {
   return {
     type: 'dir',
     name: path.basename(dir) || dir,
-    path: path.relative(currentRoot, dir).split(path.sep).join('/'),
+    path: path.relative(root, dir).split(path.sep).join('/'),
     children
   };
 }
 
-// Resolve a client-supplied relative path safely inside the current root.
-function safeResolve(relPath) {
-  const target = path.resolve(currentRoot, relPath);
-  const rootWithSep = currentRoot.endsWith(path.sep) ? currentRoot : currentRoot + path.sep;
-  if (target !== currentRoot && !target.startsWith(rootWithSep)) return null;
+// Resolve a client-supplied relative path safely inside the given root.
+function safeResolve(relPath, root = currentRoot) {
+  const target = path.resolve(root, relPath);
+  const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
+  if (target !== root && !target.startsWith(rootWithSep)) return null;
   return target;
 }
 
@@ -151,7 +220,7 @@ async function handleRequest(req, res) {
   const parsed = url.parse(req.url, true);
   const pathname = decodeURIComponent(parsed.pathname);
 
-  // API: get / set the scan root
+  // API: get / set the scan root. body.which === 'notes' apunta a la carpeta de notas.
   if (pathname === '/api/root') {
     if (req.method === 'POST') {
       const body = await readBody(req);
@@ -161,18 +230,46 @@ async function handleRequest(req, res) {
       if (!isDir(resolved)) {
         return sendJSON(res, 400, { error: `La carpeta no existe o no es accesible:\n${resolved}` });
       }
-      currentRoot = resolved;
-      saveConfig({ ...loadConfig(), root: currentRoot });
-      console.log(`  ↳ Root cambiado a: ${currentRoot}`);
-      return sendJSON(res, 200, { root: currentRoot, default: reportedDefault });
+      if (body.which === 'notes') {
+        notesRoot = resolved;
+        console.log(`  ↳ Carpeta de notas cambiada a: ${notesRoot}`);
+      } else {
+        currentRoot = resolved;
+        console.log(`  ↳ Root cambiado a: ${currentRoot}`);
+      }
+      saveConfig({ ...loadConfig(), root: currentRoot, notesRoot });
+      return sendJSON(res, 200, { root: currentRoot, notesRoot, default: reportedDefault });
     }
-    return sendJSON(res, 200, { root: currentRoot, default: reportedDefault });
+    return sendJSON(res, 200, { root: currentRoot, notesRoot, default: reportedDefault });
   }
 
-  // API: file tree
+  // API: file tree (resuelto contra la raíz de la sub-app que pide)
   if (pathname === '/api/tree') {
-    const tree = buildTree(currentRoot, 0) || { type: 'dir', name: currentRoot, path: '', children: [] };
-    return sendJSON(res, 200, { root: currentRoot, default: reportedDefault, tree });
+    const app = parsed.query.app;
+    const root = rootFor(app);
+    const tree = buildTree(root, 0, app === 'notes', root) || { type: 'dir', name: root, path: '', children: [] };
+    return sendJSON(res, 200, { root, default: reportedDefault, tree });
+  }
+
+  // API: lista las plantillas (.md en <raíz>/templates/). Siembra las built-in la 1ª vez.
+  if (pathname === '/api/templates') {
+    const root = rootFor(parsed.query.app);
+    const dir = path.join(root, 'templates');
+    try {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+        try { fs.writeFileSync(path.join(dir, 'Daily.md'), SEED_DAILY, { flag: 'wx', encoding: 'utf8' }); } catch {}
+        try { fs.writeFileSync(path.join(dir, 'Reunión.md'), SEED_MEETING, { flag: 'wx', encoding: 'utf8' }); } catch {}
+      }
+    } catch {}
+    let templates = [];
+    try {
+      templates = fs.readdirSync(dir)
+        .filter((n) => /\.(md|markdown|mdx)$/i.test(n))
+        .map((n) => ({ name: n.replace(/\.[^.]+$/, ''), file: n }))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    } catch {}
+    return sendJSON(res, 200, { templates });
   }
 
   // Mocks HTML "con esteroides": se sirven bajo /mock/<ruta> para que sus
@@ -187,9 +284,9 @@ async function handleRequest(req, res) {
   // API: raw markdown content
   if (pathname === '/api/file') {
     const rel = parsed.query.path || '';
-    const target = safeResolve(rel);
+    const target = safeResolve(rel, rootFor(parsed.query.app));
     if (!target) return sendJSON(res, 400, { error: 'Invalid path' });
-    if (!/\.(md|markdown|mdx)$/i.test(target)) return sendJSON(res, 400, { error: 'Not a markdown file' });
+    if (!/\.(md|markdown|mdx|txt)$/i.test(target)) return sendJSON(res, 400, { error: 'Tipo de archivo no legible' });
     fs.readFile(target, 'utf8', (err, content) => {
       if (err) return sendJSON(res, 404, { error: 'File not found' });
       let mtime = 0;
@@ -203,7 +300,7 @@ async function handleRequest(req, res) {
   if (pathname === '/api/save' && req.method === 'POST') {
     const body = await readBody(req);
     const rel = String(body.path || '');
-    const target = safeResolve(rel);
+    const target = safeResolve(rel, rootFor(body.app));
     if (!target) return sendJSON(res, 400, { error: 'Invalid path' });
     if (!fileKind(path.basename(target))) {
       return sendJSON(res, 400, { error: 'Tipo de archivo no editable' });
@@ -220,10 +317,88 @@ async function handleRequest(req, res) {
     }
   }
 
+  // API: create a new file (nota). Body: { dir, name, content, app }
+  if (pathname === '/api/create' && req.method === 'POST') {
+    const body = await readBody(req);
+    const root = rootFor(body.app);
+    let name = String(body.name || '').trim();
+    const dir = String(body.dir || '').trim();
+    if (!name) return sendJSON(res, 400, { error: 'Indicá un nombre.' });
+    if (/[\\/:*?"<>|]/.test(name) || name.includes('..')) {
+      return sendJSON(res, 400, { error: 'El nombre tiene caracteres inválidos.' });
+    }
+    if (!fileKind(name)) name += '.md';              // por defecto, nota Markdown
+    if (!fileKind(name)) return sendJSON(res, 400, { error: 'Extensión no soportada.' });
+    const target = safeResolve(path.join(dir, name), root);
+    if (!target || !safeResolve(dir || '.', root)) return sendJSON(res, 400, { error: 'Ruta inválida.' });
+    try {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      const content = typeof body.content === 'string' ? body.content : '';
+      fs.writeFileSync(target, content, { flag: 'wx', encoding: 'utf8' });
+    } catch (err) {
+      if (err.code === 'EEXIST') {
+        // Ya existe: en vez de duplicar, devolvemos el archivo existente para abrirlo.
+        const relEx = path.relative(root, target).split(path.sep).join('/');
+        let mtimeEx = 0; try { mtimeEx = fs.statSync(target).mtimeMs; } catch {}
+        return sendJSON(res, 200, { path: relEx, kind: fileKind(name), mtime: mtimeEx, existed: true });
+      }
+      return sendJSON(res, 500, { error: 'No se pudo crear: ' + err.message });
+    }
+    const rel = path.relative(root, target).split(path.sep).join('/');
+    let mtime = 0; try { mtime = fs.statSync(target).mtimeMs; } catch {}
+    return sendJSON(res, 200, { path: rel, kind: fileKind(name), mtime });
+  }
+
+  // API: rename a file in place. Body: { path, newName, app }
+  if (pathname === '/api/rename' && req.method === 'POST') {
+    const body = await readBody(req);
+    const root = rootFor(body.app);
+    const rel = String(body.path || '');
+    let newName = String(body.newName || '').trim();
+    const oldTarget = safeResolve(rel, root);
+    if (!oldTarget || !rel) return sendJSON(res, 400, { error: 'Ruta inválida.' });
+    if (!newName) return sendJSON(res, 400, { error: 'Indicá un nombre.' });
+    if (/[\\/:*?"<>|]/.test(newName) || newName.includes('..')) {
+      return sendJSON(res, 400, { error: 'El nombre tiene caracteres inválidos.' });
+    }
+    if (!fileKind(newName)) newName += path.extname(rel); // conservar extensión original
+    if (!fileKind(newName)) return sendJSON(res, 400, { error: 'Extensión no soportada.' });
+    const dirPosix = rel.split('/').slice(0, -1).join('/');
+    const newRel = (dirPosix ? dirPosix + '/' : '') + newName;
+    const newTarget = safeResolve(newRel, root);
+    if (!newTarget) return sendJSON(res, 400, { error: 'Ruta inválida.' });
+    if (fs.existsSync(newTarget)) return sendJSON(res, 409, { error: 'Ya existe un archivo con ese nombre.' });
+    try {
+      fs.renameSync(oldTarget, newTarget);
+    } catch (err) {
+      return sendJSON(res, 500, { error: 'No se pudo renombrar: ' + err.message });
+    }
+    let mtime = 0; try { mtime = fs.statSync(newTarget).mtimeMs; } catch {}
+    return sendJSON(res, 200, { path: newRel, kind: fileKind(newName), mtime });
+  }
+
+  // API: delete a file. Body: { path, app }
+  if (pathname === '/api/delete' && req.method === 'POST') {
+    const body = await readBody(req);
+    const root = rootFor(body.app);
+    const rel = String(body.path || '');
+    const target = safeResolve(rel, root);
+    if (!target || !rel) return sendJSON(res, 400, { error: 'Ruta inválida.' });
+    if (!fileKind(path.basename(target))) return sendJSON(res, 400, { error: 'Tipo de archivo no permitido.' });
+    try {
+      if (!fs.statSync(target).isFile()) return sendJSON(res, 400, { error: 'No es un archivo.' });
+      fs.unlinkSync(target);
+    } catch (err) {
+      if (err.code === 'ENOENT') return sendJSON(res, 404, { error: 'El archivo no existe.' });
+      return sendJSON(res, 500, { error: 'No se pudo eliminar: ' + err.message });
+    }
+    return sendJSON(res, 200, { ok: true });
+  }
+
   // API: serve a raw asset (e.g. images) referenced relative to ROOT
   if (pathname === '/api/raw') {
     const rel = parsed.query.path || '';
-    const target = safeResolve(rel);
+    const target = safeResolve(rel, rootFor(parsed.query.app));
     if (!target) { res.writeHead(400); return res.end('Invalid path'); }
     return serveStatic(res, target);
   }
@@ -270,10 +445,20 @@ function startServer(opts = {}) {
   reportedDefault = defaultRoot;
   if (opts.configDir) CONFIG_FILE = path.join(opts.configDir, 'config.json');
 
-  // Prioridad: root explícita > última guardada (config.json) > defaultRoot.
-  let root = path.resolve(opts.root || loadConfig().root || defaultRoot);
+  // .env: si PERSONAL_ENV es truthy, sus rutas mandan (preset de máquina local).
+  const env = loadEnvFile();
+  const personal = isTruthy(env.PERSONAL_ENV);
+  const envMR = personal ? env.MR_ROOT_PATH : '';
+  const envNT = personal ? env.NT_ROOT_PATH : '';
+
+  // Raíz del lector. Prioridad: CLI > .env (personal) > config.json > defaultRoot.
+  let root = path.resolve(opts.root || envMR || loadConfig().root || defaultRoot);
   if (!isDir(root)) root = isDir(defaultRoot) ? defaultRoot : DEFAULT_ROOT;
   currentRoot = root;
+
+  // Carpeta de notas (Note Taker). Prioridad: .env (personal) > config.json > root del lector.
+  let nRoot = path.resolve(envNT || loadConfig().notesRoot || currentRoot);
+  notesRoot = isDir(nRoot) ? nRoot : currentRoot;
 
   return new Promise((resolve, reject) => {
     const server = http.createServer(handleRequest);

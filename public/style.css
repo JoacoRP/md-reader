@@ -66,11 +66,113 @@ html, body {
 .sidebar-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 2px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--ui-border);
 }
-.brand { font-weight: 600; font-size: 14px; }
+/* Selector de apps (logo desplegable) */
+.app-switcher-wrap { flex: 1; min-width: 0; position: relative; }
+.app-switcher {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 4px 6px;
+  border: 1px solid transparent; border-radius: 8px;
+  background: transparent; cursor: pointer;
+  color: var(--ui-text); font: inherit; text-align: left;
+}
+.app-switcher:hover { background: color-mix(in srgb, var(--ui-text) 7%, transparent); border-color: var(--ui-border); }
+.app-switcher .app-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-switcher .app-caret { font-size: 11px; color: var(--ui-muted); margin-left: auto; transition: transform .15s; }
+.app-switcher[aria-expanded="true"] .app-caret { transform: rotate(180deg); }
+
+.app-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 50;
+  min-width: 232px;
+  background: var(--ui-bg); border: 1px solid var(--ui-border); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  padding: 5px; display: flex; flex-direction: column; gap: 2px;
+}
+.app-menu.hidden { display: none; }
+.app-option {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 8px 10px;
+  border: none; border-radius: 7px; background: transparent; cursor: pointer;
+  color: var(--ui-text); text-align: left; font: inherit;
+}
+.app-option:hover { background: color-mix(in srgb, var(--ui-text) 8%, transparent); }
+.app-option.active { background: color-mix(in srgb, var(--md-accent-color) 14%, transparent); }
+.app-option > .bi { font-size: 18px; color: var(--md-accent-color); }
+.app-option-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.app-option-name { font-weight: 600; font-size: 13px; }
+.app-option-desc { font-size: 11px; color: var(--ui-muted); }
+
+/* Split-button "Nueva nota" (botón cuadrado redondeado + caret con plantillas) */
+.split-btn {
+  position: relative;
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--ui-border); border-radius: 8px;
+}
+.split-btn.hidden { display: none; }
+.split-btn .split-main, .split-btn .split-caret {
+  border: none; background: transparent; cursor: pointer;
+  color: var(--ui-text); padding: 5px 8px; font-size: 14px;
+}
+.split-btn .split-main { border-right: 1px solid var(--ui-border); border-radius: 7px 0 0 7px; }
+.split-btn .split-caret { padding: 5px 5px; font-size: 11px; color: var(--ui-muted); border-radius: 0 7px 7px 0; }
+.split-btn .split-main:hover, .split-btn .split-caret:hover {
+  background: color-mix(in srgb, var(--ui-text) 8%, transparent);
+}
+#template-menu { top: calc(100% + 4px); right: 0; left: auto; min-width: 190px; }
+
+/* Menú contextual del árbol (posicionado por JS) */
+.ctx-menu {
+  position: fixed; z-index: 60; min-width: 170px;
+  background: var(--ui-bg); border: 1px solid var(--ui-border); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 5px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.ctx-menu.hidden { display: none; }
+
+/* Modales propios (reemplazan alert/prompt del browser) */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.hidden { display: none; }
+.modal-box {
+  width: 100%; max-width: 440px;
+  background: var(--ui-panel); color: var(--ui-text);
+  border: 1px solid var(--ui-border); border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0,0,0,.35);
+  padding: 20px 22px;
+}
+.modal-title { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+.modal-message { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ui-text); white-space: pre-line; }
+.modal-label { display: block; font-size: 12px; color: var(--ui-muted); margin-bottom: 6px; }
+.modal-input {
+  width: 100%; padding: 8px 10px;
+  border: 1px solid var(--ui-border); border-radius: 6px;
+  background: var(--ui-bg); color: var(--ui-text); font-size: 14px; outline: none;
+}
+.modal-input:focus { border-color: var(--md-accent-color); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.modal-btn {
+  padding: 7px 14px; border-radius: 7px; cursor: pointer; font-size: 13px;
+  border: 1px solid var(--ui-border); background: var(--ui-bg); color: var(--ui-text);
+}
+.modal-btn:hover { background: color-mix(in srgb, var(--ui-text) 8%, transparent); }
+.modal-btn.modal-primary {
+  background: var(--md-accent-color); border-color: var(--md-accent-color); color: #fff;
+}
+.modal-btn.modal-primary:hover { filter: brightness(1.07); }
+.modal-btn.modal-danger { background: #d1242f; border-color: #d1242f; color: #fff; }
+.modal-btn.modal-danger:hover { filter: brightness(1.07); }
+
+/* Acción destructiva en el menú contextual */
+.ctx-menu .ctx-danger > .bi { color: #d1242f; }
+.ctx-menu .ctx-danger .app-option-name { color: #d1242f; }
+.ctx-menu .ctx-danger:hover { background: color-mix(in srgb, #d1242f 12%, transparent); }
 
 .search-box { padding: 10px 12px; border-bottom: 1px solid var(--ui-border); }
 #search {
@@ -382,12 +484,21 @@ button:hover { background: var(--ui-hover); }
 }
 .markdown-body .raw-editor:focus { border-color: var(--md-accent-color); }
 
+/* Editor cómodo para notas (.txt y notas .md nuevas): tipografía de lectura. */
+.markdown-body .raw-editor.note-editor {
+  font-family: var(--md-font-family);
+  font-size: var(--md-font-size);
+  line-height: var(--md-line-height);
+  background: var(--md-bg-color);
+}
+
 .tree-label .icon { display: inline-flex; align-items: center; font-size: 15px; }
 .ic-md i { color: #4577c0; }     /* markdown — azul */
 .ic-html i { color: #e44d26; }   /* html — naranja */
+.ic-txt i { color: #6b7785; }    /* texto plano — gris */
 .ic-folder i { color: #e0a93b; } /* carpetas — ámbar */
 
-.brand .bi { color: var(--md-accent-color); }
+#app-icon { color: var(--md-accent-color); font-size: 16px; }
 .version-tag {
   font-size: 10px; font-weight: 600; color: var(--ui-muted);
   border: 1px solid var(--ui-border); border-radius: 10px;

@@ -190,10 +190,38 @@ function init() {
     commit();
   });
 
+  // Carpeta de notas (Note Taker): precargar valor actual y permitir cambiarlo.
+  fetch('/api/root').then((r) => r.json()).then((d) => {
+    if (d && d.notesRoot) el('set-notesRoot').value = d.notesRoot;
+  }).catch(() => {});
+  el('set-notesRoot-apply').addEventListener('click', applyNotesRoot);
+  el('set-notesRoot').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyNotesRoot(); });
+
   renderPresetList();
   syncControls();
   MDConfig.apply(s);
   renderPreview();
+}
+
+// Cambia la carpeta de notas de Note Taker (raíz global, persistida en el server).
+async function applyNotesRoot() {
+  const msg = el('set-notesRoot-msg');
+  const pathv = el('set-notesRoot').value.trim();
+  if (!pathv) return;
+  msg.textContent = 'Guardando…'; msg.className = 'form-text';
+  try {
+    const res = await fetch('/api/root', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: pathv, which: 'notes' })
+    });
+    const data = await res.json();
+    if (!res.ok) { msg.textContent = data.error || 'No se pudo cambiar la carpeta.'; msg.className = 'form-text text-danger'; return; }
+    el('set-notesRoot').value = data.notesRoot;
+    msg.textContent = 'Carpeta de notas actualizada.'; msg.className = 'form-text text-success';
+  } catch {
+    msg.textContent = 'Error de conexión.'; msg.className = 'form-text text-danger';
+  }
 }
 
 /* ============================ Temas / presets ============================ */

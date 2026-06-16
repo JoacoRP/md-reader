@@ -15,7 +15,37 @@
     <!-- Sidebar -->
     <aside id="sidebar">
       <div class="sidebar-header">
-        <span class="brand"><i class="bi bi-book-half"></i> Markdown Reader <span class="version-tag" id="version-tag"></span></span>
+        <div class="app-switcher-wrap">
+          <button id="app-switcher" class="app-switcher" aria-haspopup="true" aria-expanded="false" title="Cambiar de app">
+            <i class="bi bi-book-half" id="app-icon"></i>
+            <span class="app-title" id="app-title">Markdown Reader</span>
+            <span class="version-tag" id="version-tag"></span>
+            <i class="bi bi-chevron-down app-caret"></i>
+          </button>
+          <div id="app-menu" class="app-menu hidden" role="menu">
+            <button class="app-option" data-app="reader" role="menuitem">
+              <i class="bi bi-book-half"></i>
+              <span class="app-option-text">
+                <span class="app-option-name">Markdown Reader</span>
+                <span class="app-option-desc">Leer .md y mocks HTML</span>
+              </span>
+              <span class="version-tag">v1.1.0</span>
+            </button>
+            <button class="app-option" data-app="notes" role="menuitem">
+              <i class="bi bi-journal-text"></i>
+              <span class="app-option-text">
+                <span class="app-option-name">Note Taker</span>
+                <span class="app-option-desc">Tomar y crear notas</span>
+              </span>
+              <span class="version-tag">v1.0.0</span>
+            </button>
+          </div>
+        </div>
+        <div class="split-btn hidden" id="new-note-split">
+          <button id="new-note-btn" class="split-main" title="Nueva nota (.md)"><i class="bi bi-file-earmark-plus"></i></button>
+          <button id="new-note-caret" class="split-caret" aria-haspopup="true" aria-expanded="false" title="Crear desde plantilla"><i class="bi bi-chevron-down"></i></button>
+          <div id="template-menu" class="app-menu hidden" role="menu"><!-- poblado por renderTemplateMenu() --></div>
+        </div>
         <button id="collapse-btn" title="Ocultar panel"><i class="bi bi-chevron-left"></i></button>
       </div>
       <div class="root-box">
@@ -68,6 +98,27 @@
         <nav id="toc" class="toc hidden"></nav>
       </div>
     </main>
+  </div>
+
+  <!-- Menú contextual del árbol (renombrar, etc.) -->
+  <div id="ctx-menu" class="ctx-menu hidden" role="menu">
+    <button class="app-option" data-act="rename" role="menuitem">
+      <i class="bi bi-pencil"></i>
+      <span class="app-option-text"><span class="app-option-name">Renombrar</span></span>
+    </button>
+    <button class="app-option ctx-danger" data-act="delete" role="menuitem">
+      <i class="bi bi-trash"></i>
+      <span class="app-option-text"><span class="app-option-name">Eliminar</span></span>
+    </button>
+  </div>
+
+  <!-- Modal reutilizable (prompt / alert propios) -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 class="modal-title" id="modal-title"></h2>
+      <div class="modal-content" id="modal-content"></div>
+      <div class="modal-actions" id="modal-actions"></div>
+    </div>
   </div>
 
   <script src="/vendor/marked.min.js"></script>

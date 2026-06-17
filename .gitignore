@@ -1,5 +1,8 @@
-# Dependencias (no se usan, pero por si se agregan)
+# Dependencias
 node_modules/
+
+# Bundle del frontend (Vite) — se compila, no se versiona
+web/dist/
 
 # Logs / runtime
 *.log

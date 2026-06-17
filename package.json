@@ -10,12 +10,16 @@
     "md-reader": "server.js"
   },
   "scripts": {
+    "dev": "concurrently -n server,vite -c blue,magenta \"node server.js --no-open\" \"vite\"",
+    "dev:server": "node server.js --no-open",
+    "dev:web": "vite",
+    "build": "vite build",
     "start": "node server.js",
     "app": "electron .",
-    "build:win": "electron-builder --win"
+    "build:win": "npm run build && electron-builder --win"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
   },
   "keywords": [
     "markdown",
@@ -23,7 +27,8 @@
     "reader",
     "mermaid",
     "offline",
-    "electron"
+    "electron",
+    "react"
   ],
   "build": {
     "appId": "com.joacorp.mdreader",
@@ -34,7 +39,7 @@
     "files": [
       "server.js",
       "electron/**",
-      "public/**",
+      "web/dist/**",
       "package.json"
     ],
     "win": {
@@ -52,7 +57,26 @@
     }
   },
   "devDependencies": {
+    "@emotion/react": "^11.13.3",
+    "@emotion/styled": "^11.13.0",
+    "@mui/icons-material": "^6.1.6",
+    "@mui/material": "^6.1.6",
+    "@mui/x-tree-view": "^7.22.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "concurrently": "^9.1.0",
+    "dompurify": "^3.1.6",
     "electron": "^42.4.0",
-    "electron-builder": "^26.15.2"
+    "electron-builder": "^26.15.2",
+    "highlight.js": "^11.9.0",
+    "marked": "^12.0.2",
+    "mermaid": "^10.9.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.1",
+    "zustand": "^5.0.1"
   }
 }

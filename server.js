@@ -7,7 +7,9 @@ const path = require('path');
 const url = require('url');
 const { spawn } = require('child_process');
 
-const PUBLIC = path.join(__dirname, 'public');
+// Frontend compilado por Vite (web/dist). En desarrollo, el server sólo expone
+// /api y /mock; la UI la sirve Vite (vite dev) y proxea esas rutas acá.
+const PUBLIC = path.join(__dirname, 'web', 'dist');
 const DEFAULT_ROOT = path.resolve(path.join(__dirname, '..'));
 
 // --- Estado a nivel de módulo (un solo server por proceso) ------------------

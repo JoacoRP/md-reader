@@ -413,6 +413,11 @@ async function handleRequest(req, res) {
   if (!fileOnDisk.startsWith(PUBLIC)) {
     res.writeHead(403); return res.end('Forbidden');
   }
+  // SPA fallback: rutas sin extensión (p.ej. /settings) las maneja el router
+  // de React → servimos index.html y dejamos que el cliente resuelva la ruta.
+  if (!path.extname(fileOnDisk)) {
+    return serveStatic(res, path.join(PUBLIC, 'index.html'));
+  }
   serveStatic(res, fileOnDisk);
 }
 

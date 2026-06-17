@@ -1,0 +1,66 @@
+:root {
+  --md-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --md-font-size: 16px;
+  --md-line-height: 1.7;
+  --md-letter-spacing: 0px;
+  --md-content-width: 860px;
+  --md-para-spacing: 1em;
+  --md-text-align: left;
+  --md-text-color: #1f2328;
+  --md-bg-color: #ffffff;
+  --md-accent-color: #0969da;
+  --md-heading-color: #0969da;
+  --md-link-color: #0969da;
+  --md-link-underline: none;
+  --md-link-underline-hover: underline;
+  --md-code-font-size: 13.5px;
+
+  /* App chrome (independiente del estilo del documento) */
+  --ui-bg: #f6f8fa;
+  --ui-panel: #ffffff;
+  --ui-border: #d0d7de;
+  --ui-text: #1f2328;
+  --ui-muted: #656d76;
+  --ui-hover: #eaeef2;
+  --ui-active: #ddf4ff;
+}
+
+[data-theme='dark'] {
+  --ui-bg: #0d1117;
+  --ui-panel: #161b22;
+  --ui-border: #30363d;
+  --ui-text: #e6edf3;
+  --ui-muted: #8b949e;
+  --ui-hover: #21262d;
+  --ui-active: #1f3a5f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ui-border);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-muted);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

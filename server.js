@@ -456,9 +456,18 @@ function startServer(opts = {}) {
   if (!isDir(root)) root = isDir(defaultRoot) ? defaultRoot : DEFAULT_ROOT;
   currentRoot = root;
 
-  // Carpeta de notas (Note Taker). Prioridad: .env (personal) > config.json > root del lector.
-  let nRoot = path.resolve(envNT || loadConfig().notesRoot || currentRoot);
-  notesRoot = isDir(nRoot) ? nRoot : currentRoot;
+  // Carpeta de notas (Note Taker). Prioridad: .env (personal) > config.json > Documentos.
+  // No se mezcla con la raíz del lector: si la ruta configurada no existe, se
+  // avisa con claridad y se cae a la carpeta por defecto (no a currentRoot).
+  const notesConfigured = envNT || loadConfig().notesRoot;
+  const nRoot = path.resolve(notesConfigured || defaultRoot);
+  if (isDir(nRoot)) {
+    notesRoot = nRoot;
+  } else {
+    console.warn(`  ⚠️  Carpeta de notas inexistente: ${nRoot}`);
+    console.warn(`      Usando ${defaultRoot}. Corregí NT_ROOT_PATH en .env o la carpeta en Settings.`);
+    notesRoot = defaultRoot;
+  }
 
   return new Promise((resolve, reject) => {
     const server = http.createServer(handleRequest);
@@ -467,7 +476,7 @@ function startServer(opts = {}) {
     server.listen(port, '127.0.0.1', () => {
       const actualPort = server.address().port;
       if (open) openBrowser(`http://127.0.0.1:${actualPort}`);
-      resolve({ server, port: actualPort, root: currentRoot });
+      resolve({ server, port: actualPort, root: currentRoot, notesRoot });
     });
   });
 }
@@ -488,10 +497,11 @@ if (require.main === module) {
     root: cliRoot || process.env.MD_ROOT || null,
     port,
     open: !(noOpen || process.env.MD_NO_OPEN === '1')
-  }).then(({ port, root }) => {
+  }).then(({ port, root, notesRoot }) => {
     console.log('\n  📖  Markdown Reader');
     console.log('  ──────────────────────────────────────────');
-    console.log(`  Sirviendo .md desde:  ${root}`);
+    console.log(`  Lector (.md/.html):   ${root}`);
+    console.log(`  Note Taker (notas):   ${notesRoot}`);
     console.log(`  Abierto en:           http://127.0.0.1:${port}`);
     console.log('  (Ctrl+C para detener)\n');
   }).catch((err) => {

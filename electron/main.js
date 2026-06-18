@@ -75,8 +75,10 @@ async function pickFolder() {
   });
   if (res.canceled || !res.filePaths.length) return;
   const folder = res.filePaths[0];
+  // El front React expone window.__mdChangeRoot (ver AppShell) para cambiar la
+  // raíz del lector desde el menú nativo.
   mainWindow.webContents
-    .executeJavaScript(`(typeof changeRoot==='function') && changeRoot(${JSON.stringify(folder)})`)
+    .executeJavaScript(`window.__mdChangeRoot && window.__mdChangeRoot(${JSON.stringify(folder)})`)
     .catch(() => {});
 }
 

@@ -7,7 +7,9 @@ const path = require('path');
 const url = require('url');
 const { spawn } = require('child_process');
 
-const PUBLIC = path.join(__dirname, 'public');
+// Frontend compilado por Vite (web/dist). En desarrollo, el server sólo expone
+// /api y /mock; la UI la sirve Vite (vite dev) y proxea esas rutas acá.
+const PUBLIC = path.join(__dirname, 'web', 'dist');
 const DEFAULT_ROOT = path.resolve(path.join(__dirname, '..'));
 
 // --- Estado a nivel de módulo (un solo server por proceso) ------------------
@@ -410,6 +412,11 @@ async function handleRequest(req, res) {
   // Prevent escaping the public dir.
   if (!fileOnDisk.startsWith(PUBLIC)) {
     res.writeHead(403); return res.end('Forbidden');
+  }
+  // SPA fallback: rutas sin extensión (p.ej. /settings) las maneja el router
+  // de React → servimos index.html y dejamos que el cliente resuelva la ruta.
+  if (!path.extname(fileOnDisk)) {
+    return serveStatic(res, path.join(PUBLIC, 'index.html'));
   }
   serveStatic(res, fileOnDisk);
 }

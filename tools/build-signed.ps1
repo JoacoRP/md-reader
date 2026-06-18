@@ -19,6 +19,11 @@ $env:CSC_KEY_PASSWORD = $Password
 
 Push-Location $root
 try {
+  # 1) Compilar el frontend React (Vite) -> web\dist (lo que empaqueta Electron).
+  npm run build
+  if ($LASTEXITCODE -ne 0) { throw "vite build fallo (exit $LASTEXITCODE)" }
+
+  # 2) Empaquetar + firmar el instalador.
   npx electron-builder --win
   if ($LASTEXITCODE -ne 0) { throw "electron-builder fallo (exit $LASTEXITCODE)" }
 } finally {

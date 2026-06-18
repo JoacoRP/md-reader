@@ -31,8 +31,8 @@ Es **solo Windows + PowerShell** (usa `New-SelfSignedCertificate`, `electron-bui
 
 ## Prerequisitos (verificá antes de buildear)
 
-- **Dependencias de build instaladas**: el uso normal del proyecto no tiene deps, pero el
-  build sí necesita `electron` + `electron-builder`. Si no está `node_modules/`, corré:
+- **Dependencias instaladas**: el frontend es React + Vite + MUI (más `electron` +
+  `electron-builder` para el instalador). Si no está `node_modules/`, corré:
   ```powershell
   npm install
   ```
@@ -61,8 +61,10 @@ toma de ahí el nombre del `.exe` y del zip, así que tiene que coincidir.
 .\tools\build-signed.ps1 -Password "<CLAVE_SECRETA>"
 ```
 Qué hace por dentro (para que sepas qué esperar / cómo diagnosticar):
-- Setea `CSC_LINK` y `CSC_KEY_PASSWORD` (las limpia al terminar) y corre `npx electron-builder --win`.
-- Falla con error claro si no está el `.pfx` o si `electron-builder` devuelve error.
+- Compila el frontend React con **`npm run build`** (Vite → `web/dist`, que es lo que
+  empaqueta Electron) y luego setea `CSC_LINK` / `CSC_KEY_PASSWORD` (las limpia al terminar)
+  y corre `npx electron-builder --win`.
+- Falla con error claro si no está el `.pfx`, si el build de Vite falla, o si `electron-builder` devuelve error.
 - Al terminar OK, **invoca solo** `package-dist.ps1` (no lo corras vos por separado).
 
 ### 3. (Automático) Armado del zip de distribución

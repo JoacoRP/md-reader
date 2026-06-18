@@ -1,0 +1,89 @@
+import { useEffect, useRef } from 'react';
+import { Box } from '@mui/material';
+import { rawUrl } from '../../api/client';
+import { useApp } from '../../store/appStore';
+import { useSettings, resolveMermaidTheme } from '../../store/settingsStore';
+import {
+  attachCopyButtons,
+  renderMermaidIn,
+  resolveRelative,
+  stripTags,
+  toSafeHtml,
+} from '../../lib/markdown';
+
+export interface Heading {
+  id: string;
+  level: number;
+  text: string;
+}
+
+interface MarkdownViewProps {
+  content: string;
+  onHeadings: (headings: Heading[]) => void;
+  contentRef: React.RefObject<HTMLDivElement | null>;
+}
+
+// Renderiza Markdown formateado: inyecta el HTML saneado, post-procesa links e
+// imágenes relativas, conecta los botones Copiar, dibuja los diagramas Mermaid
+// y publica los headings para la TOC.
+export default function MarkdownView({ content, onHeadings, contentRef }: MarkdownViewProps) {
+  const currentPath = useApp((s) => s.currentPath);
+  const activeApp = useApp((s) => s.activeApp);
+  const openFile = useApp((s) => s.openFile);
+  const settings = useSettings((s) => s.settings);
+  const localRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = contentRef.current || localRef.current;
+    if (!el) return;
+    el.innerHTML = toSafeHtml(content);
+    enhance(el);
+    attachCopyButtons(el);
+    renderMermaidIn(el, resolveMermaidTheme(settings));
+    publishHeadings(el);
+    if (el.parentElement) el.parentElement.scrollTop = 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content, settings]);
+
+  function enhance(root: HTMLElement) {
+    root.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((a) => {
+      const href = a.getAttribute('href') || '';
+      if (href.startsWith('#')) {
+        a.addEventListener('click', (e) => {
+          const target = document.getElementById(decodeURIComponent(href.slice(1)));
+          if (target) {
+            e.preventDefault();
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+      } else if (/^https?:\/\//.test(href)) {
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      } else if (/\.(md|markdown|mdx)$/i.test(href)) {
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          openFile(resolveRelative(currentPath, href));
+        });
+      }
+    });
+    root.querySelectorAll<HTMLImageElement>('img[src]').forEach((img) => {
+      const src = img.getAttribute('src') || '';
+      if (!/^(https?:|data:|\/)/.test(src)) {
+        img.src = rawUrl(resolveRelative(currentPath, src), activeApp);
+      }
+    });
+  }
+
+  function publishHeadings(root: HTMLElement) {
+    const hs = Array.from(root.querySelectorAll<HTMLElement>('h1, h2, h3, h4'));
+    onHeadings(
+      hs.map((h) => ({
+        id: h.id,
+        level: Number(h.tagName[1]),
+        text: stripTags(h.innerHTML).replace('#', ''),
+      }))
+    );
+  }
+
+  return <Box ref={contentRef ?? localRef} className="markdown-body" />;
+}

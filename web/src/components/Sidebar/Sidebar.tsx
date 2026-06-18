@@ -1,17 +1,23 @@
 import { Box, IconButton, Tooltip, Typography } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
+import { useTree } from '../../store/treeStore';
+import RootBox from './RootBox';
+import SearchBox from './SearchBox';
+import FileTree from './FileTree';
+
+const WIDTH = 320;
 
 interface SidebarProps {
   collapsed: boolean;
   onCollapse: () => void;
 }
 
-const WIDTH = 320;
-
-// Shell del panel lateral. En la Fase 2 muestra el branding y el botón de
-// colapsar; el selector de apps, raíz, búsqueda y árbol se agregan en Fase 3/4.
+// Panel lateral del lector: branding, selector de raíz, búsqueda y árbol.
+// (El selector de apps y "Nueva nota" se agregan en la Fase 4.)
 export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
+  const root = useTree((s) => s.root);
+
   return (
     <Box
       className="no-print"
@@ -28,17 +34,7 @@ export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
         height: '100%',
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1,
-          px: 1.75,
-          py: 1.5,
-          borderBottom: 1,
-          borderColor: 'divider',
-        }}
-      >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.75, py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
         <MenuBookIcon sx={{ color: 'primary.main' }} fontSize="small" />
         <Typography sx={{ flex: 1, fontWeight: 600, fontSize: 14 }}>Markdown Reader</Typography>
         <Tooltip title="Ocultar panel">
@@ -48,10 +44,16 @@ export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
         </Tooltip>
       </Box>
 
-      <Box sx={{ flex: 1, overflowY: 'auto', p: 1 }}>
-        <Typography variant="body2" sx={{ color: 'text.secondary', p: 2, textAlign: 'center' }}>
-          (Árbol de archivos — Fase 3)
-        </Typography>
+      <RootBox />
+      <SearchBox />
+
+      <Box sx={{ flex: 1, overflowY: 'auto' }}>
+        <FileTree />
+      </Box>
+
+      <Box sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: 'divider', fontSize: 11, color: 'text.secondary', wordBreak: 'break-all' }}>
+        <Box sx={{ color: 'text.secondary', mb: 0.25 }}>Raíz actual:</Box>
+        <Box title={root}>{root}</Box>
       </Box>
     </Box>
   );

@@ -18,10 +18,21 @@ export default function AppShell() {
   const collapsed = useUi((s) => s.sidebarCollapsed);
   const setCollapsed = useUi((s) => s.setSidebarCollapsed);
 
+  const changeRoot = useTree((s) => s.changeRoot);
+  const closeFile = useApp((s) => s.closeFile);
+
   // Cargar el árbol al montar y cada vez que cambia la sub-app.
   useEffect(() => {
     loadTree(activeApp);
   }, [activeApp, loadTree]);
+
+  // Puente para el menú nativo de Electron ("Abrir carpeta…").
+  useEffect(() => {
+    (window as unknown as { __mdChangeRoot?: (p: string) => void }).__mdChangeRoot = async (folder: string) => {
+      const ok = await changeRoot(folder, useApp.getState().activeApp);
+      if (ok) closeFile();
+    };
+  }, [changeRoot, closeFile]);
 
   // Abrir el archivo del hash de la URL una sola vez al arrancar.
   useEffect(() => {

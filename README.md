@@ -2,9 +2,11 @@
 
 Cliente web local para leer y editar archivos **Markdown** (y mockups **HTML**) de forma legible: tablas, diagramas **Mermaid**, resaltado de código, tabla de contenidos, mocks embebidos y estilos totalmente personalizables.
 
+Incluye además **Note Taker**: una sub-app para crear y editar notas (`.md`/`.txt`) con plantillas, sobre una carpeta propia. Se cambia desde el selector del logo.
+
 Hay dos formas de usarlo:
 - **Como app de Windows** (recomendado para usuarios no técnicos): se instala con un `.exe` y se usa como cualquier programa, **sin Node ni terminal**.
-- **Vía CLI / Node** (para desarrolladores): el frontend es offline y sin dependencias (Bootstrap, marked, Mermaid, highlight.js, DOMPurify están vendoreadas en `public/vendor/`).
+- **Vía CLI / Node** (para desarrolladores): el frontend es **React + TypeScript + MUI** (estado con Zustand), compilado con **Vite** a `web/dist`. El bundle es offline (marked, Mermaid, highlight.js, DOMPurify quedan empaquetadas); el `server.js` sigue sin dependencias de runtime.
 
 ---
 
@@ -28,10 +30,10 @@ Para desinstalar: *Configuración de Windows → Aplicaciones → Markdown Reade
 
 ## Requisitos (uso vía CLI / desarrollo)
 
-Lo único necesario es **Node.js ≥ 16** y un browser. Verificá si ya lo tenés:
+Lo único necesario es **Node.js ≥ 18** y un browser. Verificá si ya lo tenés:
 
 ```bash
-node --version      # debería imprimir v16 o superior
+node --version      # debería imprimir v18 o superior
 ```
 
 Si no aparece, instalá la versión **LTS** desde <https://nodejs.org>.
@@ -43,9 +45,8 @@ Si no aparece, instalá la versión **LTS** desde <https://nodejs.org>.
 ```bash
 git clone https://github.com/JoacoRP/md-reader.git
 cd md-reader
+npm install          # trae el toolchain de frontend (React/Vite/MUI) y Electron
 ```
-
-**No se corre `npm install`**: el proyecto no tiene dependencias.
 
 En **macOS / Linux**, dale permiso de ejecución al launcher (sólo la primera vez):
 
@@ -53,35 +54,34 @@ En **macOS / Linux**, dale permiso de ejecución al launcher (sólo la primera v
 chmod +x start.sh
 ```
 
-En **Windows** no hace falta nada extra.
-
 ---
 
 ## Up & Down (arrancar y detener)
 
-### Arrancar (up)
+### Desarrollo (con HMR)
 
-Elegí según tu sistema — todos hacen lo mismo: levantan el server y **abren el browser solo** en <http://localhost:4321>.
+```bash
+npm run dev
+```
 
-| Sistema | Comando |
-|---|---|
-| Windows (doble-clic) | doble-clic en **`start.cmd`** |
-| Windows (terminal) | `.\start.cmd` o `.\start.ps1` |
-| macOS / Linux | `./start.sh` |
-| Cualquiera (npm) | `npm start` |
+Levanta **dos procesos** (vía `concurrently`): el backend Node (`server.js`, puerto 4321) y el **dev server de Vite** (puerto 5173, con recarga en caliente). Abrí <http://localhost:5173>. Vite proxea `/api` y `/mock` al backend.
+
+### Producción / uso real (un solo proceso)
+
+Hay que compilar el frontend una vez y después servirlo con el backend:
+
+```bash
+npm run build        # compila web/dist
+npm start            # server.js sirve web/dist en http://localhost:4321
+```
+
+Los launchers `start.cmd` / `start.ps1` / `start.sh` corren `node server.js` (requieren un `npm run build` previo).
 
 ### Detener (down)
 
-El server corre en primer plano en la terminal. Para bajarlo:
-
-- **`Ctrl + C`** en la terminal donde está corriendo, **o**
-- cerrá la ventana de la terminal (si lo abriste con doble-clic en `start.cmd`).
-
-No queda ningún proceso en segundo plano ni servicio: al cortar el proceso, se baja todo.
+El server corre en primer plano: **`Ctrl + C`** en la terminal (o cerrá la ventana). No queda nada en segundo plano.
 
 ### Opciones de arranque
-
-Por defecto indexa la **carpeta padre** del proyecto. Para cambiar carpeta o puerto:
 
 | Quiero… | Comando |
 |---|---|
@@ -89,9 +89,8 @@ Por defecto indexa la **carpeta padre** del proyecto. Para cambiar carpeta o pue
 | Cambiar el puerto | `node server.js --port 5000` |
 | No abrir el browser | `node server.js --no-open` |
 | Vía variables de entorno | `MD_ROOT=/ruta MD_PORT=5000 node server.js` |
-| En Windows con el `.ps1` | `.\start.ps1 C:\ruta -Port 5000` |
 
-> Si el puerto está ocupado, el server lo avisa y sugiere otro. La carpeta raíz también se puede cambiar después desde la UI (ver abajo).
+> Si el puerto está ocupado, el server lo avisa y sugiere otro. La carpeta raíz también se puede cambiar después desde la UI.
 
 ---
 
@@ -117,6 +116,12 @@ Por defecto indexa la **carpeta padre** del proyecto. Para cambiar carpeta o pue
 - El botón **⚙︎** abre la página de **configuración**: panel de controles a la izquierda (tipografía, colores, código y diagramas, tema) y **vista previa en vivo** a la derecha.
 - **Temas:** elegí un preset integrado (Default, Sepia, Night, Alto contraste) o **guardá el estado actual como tema propio** con nombre (reutilizable y borrable). **Restablecer** pide confirmación.
 - El **🌙 / ☀️** del lector alterna claro/oscuro rápido. Las preferencias se guardan en `localStorage`.
+
+### Note Taker
+- El **logo es un selector de apps**: cambiá entre **Markdown Reader** (lectura) y **Note Taker** (notas).
+- En Note Taker, **Nueva nota** crea un `.md` (o elegí una **plantilla** desde el caret; las plantillas viven en `<carpeta de notas>/templates/` con placeholders `{{date}}`, `{{time}}`, `{{datetime}}`).
+- Las notas se editan al toque con **autosave**; podés **renombrar** y **eliminar** desde el menú contextual (clic derecho).
+- La **carpeta de notas** es independiente de la raíz del lector y se configura en **⚙︎ → Carpeta de notas**.
 
 ### Otros
 - **Tabla de contenidos** flotante con seguimiento de scroll (botón de TOC).
@@ -181,18 +186,22 @@ md-reader/
 ├─ start.ps1          # launcher Windows (PowerShell)
 ├─ start.sh           # launcher macOS / Linux
 ├─ package.json       # metadatos + scripts + config de electron-builder
-├─ public/
-│  ├─ index.html      # lector
-│  ├─ settings.html   # página de configuración (Bootstrap) + preview en vivo
-│  ├─ style.css       # tema del documento vía variables CSS
-│  ├─ config.js       # configuración compartida: defaults, presets, versión, apply()
-│  ├─ md-core.js      # núcleo de render: marked + Mermaid + highlight.js + sanitize
-│  ├─ app.js          # lógica del lector (árbol, búsqueda, raw/editor, navegación)
-│  ├─ settings.js     # lógica de la página de configuración
-│  └─ vendor/         # librerías locales (offline)
+├─ vite.config.ts     # config de Vite (root=web, proxy a server.js en dev)
+└─ web/               # frontend React + TypeScript (compila a web/dist)
+   ├─ index.html
+   ├─ tsconfig.json
+   └─ src/
+      ├─ main.tsx        # boot: ThemeBridge + Router
+      ├─ App.tsx         # rutas (/ lector, /settings)
+      ├─ theme.ts        # vars --md-* + tema de hljs + createTheme de MUI
+      ├─ api/client.ts   # cliente tipado de los endpoints
+      ├─ store/          # Zustand: settings, tree, app (documento/notas), ui, dialog
+      ├─ lib/            # markdown (marked+purify+hljs+mermaid), formato, mock
+      ├─ components/     # Sidebar, Topbar, content, settings, dialogs
+      └─ pages/          # SettingsPage
 ```
 
-`config.json` se crea en runtime (raíz elegida) y está gitignored.
+`web/dist/` (bundle) y `config.json` (raíz elegida) se generan en runtime y están gitignored.
 
 ---
 

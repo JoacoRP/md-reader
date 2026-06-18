@@ -29,6 +29,21 @@ export default function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Red de seguridad: guardar ediciones pendientes al cerrar/recargar.
+  useEffect(() => {
+    const onUnload = () => {
+      const st = useApp.getState();
+      if (st.draft != null && st.currentPath && st.draft !== st.currentContent) {
+        const blob = new Blob([JSON.stringify({ path: st.currentPath, content: st.draft, app: st.activeApp })], {
+          type: 'application/json',
+        });
+        navigator.sendBeacon('/api/save', blob);
+      }
+    };
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, []);
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Sidebar collapsed={collapsed} onCollapse={() => setCollapsed(true)} />

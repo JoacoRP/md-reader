@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { api, type AppId, type FileKind } from '../api/client';
+import { api, type AppId, type FileKind, type TemplateInfo } from '../api/client';
+import { useTree } from './treeStore';
+import { alertDialog, confirmDialog, promptDialog } from './dialogStore';
 
 // Estado del documento activo y de la sub-app (reader / notes). Mirror del estado
 // imperativo de public/app.js, ahora reactivo. La edición/autosave (Fase 4) usa
@@ -26,6 +28,7 @@ interface AppState {
   rawMode: boolean; // toggle global raw/formateado
   forceEditOnce: boolean; // abrir una nota nueva directo en edición
   saveStatus: SaveStatus;
+  templates: TemplateInfo[];
 
   isNotes: () => boolean;
   setApp: (app: AppId) => Promise<void>;
@@ -35,6 +38,28 @@ interface AppState {
   toggleRaw: () => Promise<void>;
   setEditorContent: (text: string) => void;
   flushRawEdits: () => Promise<void>;
+
+  // --- Note Taker ---
+  loadTemplates: () => Promise<void>;
+  newBlankNote: () => Promise<void>;
+  newFromTemplate: (file: string) => Promise<void>;
+  renameFile: (path: string) => Promise<void>;
+  deleteFile: (path: string) => Promise<void>;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+// Reemplaza placeholders de plantilla por la fecha/hora local al crear.
+function applyPlaceholders(text: string): string {
+  const now = new Date();
+  const date = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()}`;
+  const time = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  return text
+    .replace(/\{\{\s*datetime\s*\}\}/gi, `${date} ${time}`)
+    .replace(/\{\{\s*date\s*\}\}/gi, date)
+    .replace(/\{\{\s*time\s*\}\}/gi, time);
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -47,6 +72,7 @@ export const useApp = create<AppState>((set, get) => ({
   rawMode: localStorage.getItem(RAW_KEY) === '1',
   forceEditOnce: false,
   saveStatus: 'hidden',
+  templates: [],
 
   isNotes: () => get().activeApp === 'notes',
 
@@ -143,4 +169,101 @@ export const useApp = create<AppState>((set, get) => ({
       set({ saveStatus: 'error' });
     }
   },
+
+  loadTemplates: async () => {
+    try {
+      const data = await api.getTemplates(get().activeApp);
+      set({ templates: data.templates || [] });
+    } catch {
+      set({ templates: [] });
+    }
+  },
+
+  newBlankNote: async () => {
+    const name = await promptDialog({
+      title: 'Nueva nota',
+      label: 'Nombre de la nota (se crea como .md)',
+      confirmText: 'Crear',
+    });
+    if (name) await createNote(get, name, '');
+  },
+
+  newFromTemplate: async (file) => {
+    const app = get().activeApp;
+    let content = '';
+    try {
+      const data = await api.getFile('templates/' + file, app);
+      content = applyPlaceholders(data.content);
+    } catch {
+      await alertDialog({ title: 'Error', message: 'No se pudo leer la plantilla.' });
+      return;
+    }
+    const base = file.replace(/\.[^.]+$/, '');
+    const now = new Date();
+    const suggested = `${base}_${now.getFullYear()}_${pad2(now.getMonth() + 1)}_${pad2(now.getDate())}`;
+    const name = await promptDialog({
+      title: 'Nueva nota desde plantilla',
+      label: 'Nombre de la nota',
+      value: suggested,
+      confirmText: 'Crear',
+    });
+    if (name) await createNote(get, name, content);
+  },
+
+  renameFile: async (path) => {
+    if (!path) return;
+    await get().flushRawEdits();
+    const app = get().activeApp;
+    const oldName = path.split('/').pop() || '';
+    const newName = await promptDialog({
+      title: 'Renombrar archivo',
+      label: 'Nuevo nombre',
+      value: oldName,
+      confirmText: 'Renombrar',
+    });
+    if (!newName || newName === oldName) return;
+    try {
+      const data = await api.rename(path, newName, app);
+      const wasOpen = get().currentPath === path;
+      await useTree.getState().loadTree(app);
+      if (wasOpen) await get().openFile(data.path, data.kind);
+    } catch (e) {
+      await alertDialog({ title: 'No se pudo renombrar', message: e instanceof Error ? e.message : '' });
+    }
+  },
+
+  deleteFile: async (path) => {
+    if (!path) return;
+    const app = get().activeApp;
+    const name = path.split('/').pop() || '';
+    const ok = await confirmDialog({
+      title: 'Eliminar nota',
+      message: `¿Eliminar "${name}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.remove(path, app);
+      const wasOpen = get().currentPath === path;
+      await useTree.getState().loadTree(app);
+      if (wasOpen) get().closeFile();
+    } catch (e) {
+      await alertDialog({ title: 'No se pudo eliminar', message: e instanceof Error ? e.message : '' });
+    }
+  },
 }));
+
+// Crea una nota vía /api/create, refresca el árbol y la abre en edición.
+async function createNote(get: () => AppState, name: string, content: string): Promise<void> {
+  const app = get().activeApp;
+  const cur = get().currentPath;
+  const dir = cur ? cur.split('/').slice(0, -1).join('/') : '';
+  try {
+    const data = await api.create(dir, name, content, app);
+    await useTree.getState().loadTree(app);
+    await get().openFile(data.path, data.kind, { editFirst: true });
+  } catch (e) {
+    await alertDialog({ title: 'No se pudo crear', message: e instanceof Error ? e.message : 'No se pudo crear la nota.' });
+  }
+}

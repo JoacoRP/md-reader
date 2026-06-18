@@ -9,6 +9,6 @@ export interface AppMeta {
 }
 
 export const APPS: Record<AppId, AppMeta> = {
-  reader: { id: 'reader', title: 'Markdown Reader', version: '1.2.0', desc: 'Leer .md y mocks HTML' },
+  reader: { id: 'reader', title: 'Markdown Reader', version: '2.0.0', desc: 'Leer .md y mocks HTML' },
   notes: { id: 'notes', title: 'Note Taker', version: '1.0.0', desc: 'Tomar y crear notas' },
 };

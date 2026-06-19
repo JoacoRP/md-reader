@@ -51,6 +51,15 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
+// Carpeta destino (relativa a la raíz de notas) según la plantilla usada.
+// Las notas en blanco van a la raíz; las plantillas conocidas a su subcarpeta.
+function templateTargetDir(file: string): string {
+  const base = file.replace(/\.[^.]+$/, '').toLowerCase();
+  if (/daily|diaria/.test(base)) return 'Dailys';
+  if (/reuni[oó]n|meeting/.test(base)) return 'Reuniones';
+  return ''; // otras plantillas: raíz de notas
+}
+
 // Reemplaza placeholders de plantilla por la fecha/hora local al crear.
 function applyPlaceholders(text: string): string {
   const now = new Date();
@@ -185,7 +194,7 @@ export const useApp = create<AppState>((set, get) => ({
       label: 'Nombre de la nota (se crea como .md)',
       confirmText: 'Crear',
     });
-    if (name) await createNote(get, name, '');
+    if (name) await createNote(get, name, '', ''); // nota en blanco -> raíz de notas
   },
 
   newFromTemplate: async (file) => {
@@ -207,7 +216,7 @@ export const useApp = create<AppState>((set, get) => ({
       value: suggested,
       confirmText: 'Crear',
     });
-    if (name) await createNote(get, name, content);
+    if (name) await createNote(get, name, content, templateTargetDir(file));
   },
 
   renameFile: async (path) => {
@@ -254,11 +263,10 @@ export const useApp = create<AppState>((set, get) => ({
   },
 }));
 
-// Crea una nota vía /api/create, refresca el árbol y la abre en edición.
-async function createNote(get: () => AppState, name: string, content: string): Promise<void> {
+// Crea una nota vía /api/create en `dir` (relativo a la raíz de notas; el server
+// crea la subcarpeta si no existe), refresca el árbol y la abre en edición.
+async function createNote(get: () => AppState, name: string, content: string, dir: string): Promise<void> {
   const app = get().activeApp;
-  const cur = get().currentPath;
-  const dir = cur ? cur.split('/').slice(0, -1).join('/') : '';
   try {
     const data = await api.create(dir, name, content, app);
     await useTree.getState().loadTree(app);

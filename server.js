@@ -452,21 +452,25 @@ function startServer(opts = {}) {
   reportedDefault = defaultRoot;
   if (opts.configDir) CONFIG_FILE = path.join(opts.configDir, 'config.json');
 
-  // .env: si PERSONAL_ENV es truthy, sus rutas mandan (preset de máquina local).
+  // .env: si PERSONAL_ENV es truthy, sus rutas SIEMBRAN las raíces (semilla
+  // inicial). El cache real es config.json: una vez que el usuario cambia la
+  // carpeta desde Settings, ese valor manda y el .env deja de pisarlo en cada
+  // reinicio. Así las rutas se modifican sólo por Settings y persisten.
   const env = loadEnvFile();
   const personal = isTruthy(env.PERSONAL_ENV);
   const envMR = personal ? env.MR_ROOT_PATH : '';
   const envNT = personal ? env.NT_ROOT_PATH : '';
+  const cfg = loadConfig();
 
-  // Raíz del lector. Prioridad: CLI > .env (personal) > config.json > defaultRoot.
-  let root = path.resolve(opts.root || envMR || loadConfig().root || defaultRoot);
+  // Raíz del lector. Prioridad: CLI > config.json (cache) > .env (semilla) > default.
+  let root = path.resolve(opts.root || cfg.root || envMR || defaultRoot);
   if (!isDir(root)) root = isDir(defaultRoot) ? defaultRoot : DEFAULT_ROOT;
   currentRoot = root;
 
-  // Carpeta de notas (Note Taker). Prioridad: .env (personal) > config.json > Documentos.
+  // Carpeta de notas (Note Taker). Prioridad: config.json (cache) > .env (semilla) > Documentos.
   // No se mezcla con la raíz del lector: si la ruta configurada no existe, se
   // avisa con claridad y se cae a la carpeta por defecto (no a currentRoot).
-  const notesConfigured = envNT || loadConfig().notesRoot;
+  const notesConfigured = cfg.notesRoot || envNT;
   const nRoot = path.resolve(notesConfigured || defaultRoot);
   if (isDir(nRoot)) {
     notesRoot = nRoot;

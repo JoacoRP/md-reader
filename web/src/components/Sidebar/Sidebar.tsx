@@ -6,7 +6,6 @@ import { useTree } from '../../store/treeStore';
 import { useApp } from '../../store/appStore';
 import AppSwitcher from './AppSwitcher';
 import NewNoteButton from './NewNoteButton';
-import RootBox from './RootBox';
 import SearchBox from './SearchBox';
 import FileTree from './FileTree';
 import TreeContextMenu, { type CtxTarget } from './TreeContextMenu';
@@ -56,7 +55,6 @@ export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
         </Tooltip>
       </Box>
 
-      <RootBox />
       <SearchBox />
 
       <Box sx={{ flex: 1, overflowY: 'auto' }}>

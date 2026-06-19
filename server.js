@@ -92,6 +92,35 @@ const SEED_MEETING = `# Reunión — {{date}}
 - [ ] Acción — responsable — fecha límite
 `;
 
+// Asegura la carpeta de plantillas y siembra las built-in la primera vez.
+// Devuelve la ruta de la carpeta de templates.
+function ensureTemplatesDir(root) {
+  const dir = path.join(root, 'templates');
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      try { fs.writeFileSync(path.join(dir, 'Daily.md'), SEED_DAILY, { flag: 'wx', encoding: 'utf8' }); } catch {}
+      try { fs.writeFileSync(path.join(dir, 'Reunión.md'), SEED_MEETING, { flag: 'wx', encoding: 'utf8' }); } catch {}
+    }
+  } catch {}
+  return dir;
+}
+
+// Andamiaje de la carpeta de notas: crea Dailys/, Reuniones/ y templates/ si
+// faltan. Se corre cada vez que se define la raíz de Note Taker (arranque y
+// cambio por Settings) para que los destinos de creación existan siempre.
+// Las subcarpetas deben coincidir con templateTargetDir() del cliente.
+function ensureNotesScaffold(root) {
+  if (!root || !isDir(root)) return;
+  for (const sub of ['Dailys', 'Reuniones']) {
+    try {
+      const d = path.join(root, sub);
+      if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+    } catch {}
+  }
+  ensureTemplatesDir(root);
+}
+
 const IGNORE_DIRS = new Set([
   'node_modules', '.git', '.svn', 'dist', 'build', 'bin', 'obj',
   '.next', '.nuxt', '.cache', 'coverage', '.vs', '.idea', '.angular',
@@ -234,6 +263,7 @@ async function handleRequest(req, res) {
       }
       if (body.which === 'notes') {
         notesRoot = resolved;
+        ensureNotesScaffold(notesRoot); // crea Dailys/Reuniones/templates si faltan
         console.log(`  ↳ Carpeta de notas cambiada a: ${notesRoot}`);
       } else {
         currentRoot = resolved;
@@ -256,14 +286,7 @@ async function handleRequest(req, res) {
   // API: lista las plantillas (.md en <raíz>/templates/). Siembra las built-in la 1ª vez.
   if (pathname === '/api/templates') {
     const root = rootFor(parsed.query.app);
-    const dir = path.join(root, 'templates');
-    try {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-        try { fs.writeFileSync(path.join(dir, 'Daily.md'), SEED_DAILY, { flag: 'wx', encoding: 'utf8' }); } catch {}
-        try { fs.writeFileSync(path.join(dir, 'Reunión.md'), SEED_MEETING, { flag: 'wx', encoding: 'utf8' }); } catch {}
-      }
-    } catch {}
+    const dir = ensureTemplatesDir(root);
     let templates = [];
     try {
       templates = fs.readdirSync(dir)
@@ -479,6 +502,7 @@ function startServer(opts = {}) {
     console.warn(`      Usando ${defaultRoot}. Corregí NT_ROOT_PATH en .env o la carpeta en Settings.`);
     notesRoot = defaultRoot;
   }
+  ensureNotesScaffold(notesRoot); // garantiza Dailys/Reuniones/templates en la raíz de notas
 
   return new Promise((resolve, reject) => {
     const server = http.createServer(handleRequest);

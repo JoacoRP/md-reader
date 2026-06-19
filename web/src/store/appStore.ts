@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { api, type AppId, type FileKind, type TemplateInfo } from '../api/client';
+import { api, type AppId, type FileKind, type TemplateInfo, type TreeDir, type TreeFile } from '../api/client';
 import { useTree } from './treeStore';
 import { alertDialog, confirmDialog, promptDialog } from './dialogStore';
 
@@ -51,6 +51,15 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
+// Carpeta destino (relativa a la raíz de notas) según la plantilla usada.
+// Las notas en blanco van a la raíz; las plantillas conocidas a su subcarpeta.
+function templateTargetDir(file: string): string {
+  const base = file.replace(/\.[^.]+$/, '').toLowerCase();
+  if (/daily|diaria/.test(base)) return 'Dailys';
+  if (/reuni[oó]n|meeting/.test(base)) return 'Reuniones';
+  return ''; // otras plantillas: raíz de notas
+}
+
 // Reemplaza placeholders de plantilla por la fecha/hora local al crear.
 function applyPlaceholders(text: string): string {
   const now = new Date();
@@ -60,6 +69,71 @@ function applyPlaceholders(text: string): string {
     .replace(/\{\{\s*datetime\s*\}\}/gi, `${date} ${time}`)
     .replace(/\{\{\s*date\s*\}\}/gi, date)
     .replace(/\{\{\s*time\s*\}\}/gi, time);
+}
+
+// Secciones de la Daily que se heredan de la anterior al crear una nueva.
+const DAILY_CARRY_SECTIONS = ['Mío', 'Notas'];
+
+function isDailyTemplate(file: string): boolean {
+  return /daily|diaria/.test(file.replace(/\.[^.]+$/, '').toLowerCase());
+}
+
+// Extrae el bloque "## <heading>" (encabezado incluido) hasta el próximo "## "
+// o el fin del documento, sin blancos finales. null si la sección no existe.
+function extractSection(md: string, heading: string): string | null {
+  const lines = md.split('\n');
+  const start = lines.findIndex((l) => l.trim() === `## ${heading}`);
+  if (start === -1) return null;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^##\s/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  return lines.slice(start, end).join('\n').replace(/\s+$/, '');
+}
+
+// Reemplaza el bloque "## <heading>" por `replacement` (encabezado incluido).
+// Si la sección no existe en el doc, lo devuelve sin cambios.
+function replaceSection(md: string, heading: string, replacement: string): string {
+  const lines = md.split('\n');
+  const start = lines.findIndex((l) => l.trim() === `## ${heading}`);
+  if (start === -1) return md;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^##\s/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  const before = lines.slice(0, start);
+  const after = lines.slice(end);
+  const sep = after.length ? [''] : []; // una línea en blanco antes de la próxima sección
+  return [...before, ...replacement.split('\n'), ...sep, ...after].join('\n');
+}
+
+// Para una Daily nueva: hereda "Mío" y "Notas" de la última Daily (la .md más
+// reciente en Dailys/). Best-effort: ante cualquier falla devuelve el contenido
+// del template sin tocar.
+async function carryOverDailySections(content: string): Promise<string> {
+  try {
+    const { tree } = await api.getTree('notes');
+    const dailys = tree.children.find((c): c is TreeDir => c.type === 'dir' && c.name === 'Dailys');
+    if (!dailys) return content;
+    const files = dailys.children.filter((c): c is TreeFile => c.type === 'file' && c.kind === 'md');
+    if (!files.length) return content;
+    const last = files.reduce((a, b) => (b.mtime > a.mtime ? b : a));
+    const data = await api.getFile(last.path, 'notes');
+    let out = content;
+    for (const heading of DAILY_CARRY_SECTIONS) {
+      const section = extractSection(data.content, heading);
+      if (section) out = replaceSection(out, heading, section);
+    }
+    return out;
+  } catch {
+    return content;
+  }
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -185,7 +259,7 @@ export const useApp = create<AppState>((set, get) => ({
       label: 'Nombre de la nota (se crea como .md)',
       confirmText: 'Crear',
     });
-    if (name) await createNote(get, name, '');
+    if (name) await createNote(get, name, '', ''); // nota en blanco -> raíz de notas
   },
 
   newFromTemplate: async (file) => {
@@ -207,7 +281,10 @@ export const useApp = create<AppState>((set, get) => ({
       value: suggested,
       confirmText: 'Crear',
     });
-    if (name) await createNote(get, name, content);
+    if (!name) return;
+    // Daily nueva: arrastra "Mío" y "Notas" de la última Daily.
+    if (isDailyTemplate(file)) content = await carryOverDailySections(content);
+    await createNote(get, name, content, templateTargetDir(file));
   },
 
   renameFile: async (path) => {
@@ -254,11 +331,10 @@ export const useApp = create<AppState>((set, get) => ({
   },
 }));
 
-// Crea una nota vía /api/create, refresca el árbol y la abre en edición.
-async function createNote(get: () => AppState, name: string, content: string): Promise<void> {
+// Crea una nota vía /api/create en `dir` (relativo a la raíz de notas; el server
+// crea la subcarpeta si no existe), refresca el árbol y la abre en edición.
+async function createNote(get: () => AppState, name: string, content: string, dir: string): Promise<void> {
   const app = get().activeApp;
-  const cur = get().currentPath;
-  const dir = cur ? cur.split('/').slice(0, -1).join('/') : '';
   try {
     const data = await api.create(dir, name, content, app);
     await useTree.getState().loadTree(app);

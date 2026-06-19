@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import {
   Box,
   Card,
@@ -9,13 +8,11 @@ import {
   Select,
   Slider,
   Switch,
-  TextField,
   Typography,
-  Button,
 } from '@mui/material';
-import { api } from '../../api/client';
 import { useSettings, type Settings } from '../../store/settingsStore';
 import PresetList from './PresetList';
+import RootCard from './RootCard';
 
 interface RangeDef {
   id: keyof Settings;
@@ -26,7 +23,7 @@ interface RangeDef {
   suffix: string;
 }
 const RANGES: RangeDef[] = [
-  { id: 'fontSize', label: 'Tamaño de fuente', min: 12, max: 28, step: 1, suffix: 'px' },
+  { id: 'fontSize', label: 'Tamaño de fuente', min: 8, max: 28, step: 1, suffix: 'px' },
   { id: 'lineHeight', label: 'Interlineado', min: 1.2, max: 2.4, step: 0.05, suffix: '' },
   { id: 'letterSpacing', label: 'Espaciado de letras', min: -1, max: 3, step: 0.1, suffix: 'px' },
   { id: 'contentWidth', label: 'Ancho de contenido', min: 560, max: 1500, step: 20, suffix: 'px' },
@@ -182,58 +179,8 @@ export default function ControlsPanel() {
         <CardContent>{selectControl('theme', 'Tema de la interfaz', UI_THEME_OPTS)}</CardContent>
       </Card>
 
-      <NotesRootCard />
+      <RootCard which="reader" title="Carpeta del lector (Markdown Reader)" />
+      <RootCard which="notes" title="Carpeta de notas (Note Taker)" />
     </Box>
-  );
-}
-
-// Carpeta de notas (Note Taker): raíz global persistida en el server.
-function NotesRootCard() {
-  const [path, setPath] = useState('');
-  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
-
-  useEffect(() => {
-    api
-      .getRoots()
-      .then((d) => setPath(d.notesRoot))
-      .catch(() => {});
-  }, []);
-
-  const apply = async () => {
-    const p = path.trim();
-    if (!p) return;
-    setMsg({ text: 'Guardando…', ok: true });
-    try {
-      const d = await api.setRoot(p, 'notes');
-      setPath(d.notesRoot);
-      setMsg({ text: 'Carpeta de notas actualizada.', ok: true });
-    } catch (e) {
-      setMsg({ text: e instanceof Error ? e.message : 'No se pudo cambiar la carpeta.', ok: false });
-    }
-  };
-
-  return (
-    <Card variant="outlined" sx={{ mb: 2 }}>
-      <CardHeader title="Carpeta de notas (Note Taker)" titleTypographyProps={{ fontSize: 13, fontWeight: 600 }} sx={{ pb: 0 }} />
-      <CardContent>
-        <Typography sx={{ fontSize: 13, mb: 0.5 }}>Ruta de la carpeta de notas</Typography>
-        <Box sx={{ display: 'flex', gap: 0.75 }}>
-          <TextField
-            fullWidth
-            size="small"
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && apply()}
-            placeholder="C:\Users\...\Notas"
-            spellCheck={false}
-            InputProps={{ sx: { fontSize: 13 } }}
-          />
-          <Button variant="contained" size="small" onClick={apply}>
-            Aplicar
-          </Button>
-        </Box>
-        {msg && <Typography sx={{ fontSize: 11, mt: 0.75, color: msg.ok ? 'success.main' : 'error.main' }}>{msg.text}</Typography>}
-      </CardContent>
-    </Card>
   );
 }

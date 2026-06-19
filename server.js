@@ -92,6 +92,35 @@ const SEED_MEETING = `# Reunión — {{date}}
 - [ ] Acción — responsable — fecha límite
 `;
 
+// Asegura la carpeta de plantillas y siembra las built-in la primera vez.
+// Devuelve la ruta de la carpeta de templates.
+function ensureTemplatesDir(root) {
+  const dir = path.join(root, 'templates');
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      try { fs.writeFileSync(path.join(dir, 'Daily.md'), SEED_DAILY, { flag: 'wx', encoding: 'utf8' }); } catch {}
+      try { fs.writeFileSync(path.join(dir, 'Reunión.md'), SEED_MEETING, { flag: 'wx', encoding: 'utf8' }); } catch {}
+    }
+  } catch {}
+  return dir;
+}
+
+// Andamiaje de la carpeta de notas: crea Dailys/, Reuniones/ y templates/ si
+// faltan. Se corre cada vez que se define la raíz de Note Taker (arranque y
+// cambio por Settings) para que los destinos de creación existan siempre.
+// Las subcarpetas deben coincidir con templateTargetDir() del cliente.
+function ensureNotesScaffold(root) {
+  if (!root || !isDir(root)) return;
+  for (const sub of ['Dailys', 'Reuniones']) {
+    try {
+      const d = path.join(root, sub);
+      if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+    } catch {}
+  }
+  ensureTemplatesDir(root);
+}
+
 const IGNORE_DIRS = new Set([
   'node_modules', '.git', '.svn', 'dist', 'build', 'bin', 'obj',
   '.next', '.nuxt', '.cache', 'coverage', '.vs', '.idea', '.angular',
@@ -234,6 +263,7 @@ async function handleRequest(req, res) {
       }
       if (body.which === 'notes') {
         notesRoot = resolved;
+        ensureNotesScaffold(notesRoot); // crea Dailys/Reuniones/templates si faltan
         console.log(`  ↳ Carpeta de notas cambiada a: ${notesRoot}`);
       } else {
         currentRoot = resolved;
@@ -256,14 +286,7 @@ async function handleRequest(req, res) {
   // API: lista las plantillas (.md en <raíz>/templates/). Siembra las built-in la 1ª vez.
   if (pathname === '/api/templates') {
     const root = rootFor(parsed.query.app);
-    const dir = path.join(root, 'templates');
-    try {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-        try { fs.writeFileSync(path.join(dir, 'Daily.md'), SEED_DAILY, { flag: 'wx', encoding: 'utf8' }); } catch {}
-        try { fs.writeFileSync(path.join(dir, 'Reunión.md'), SEED_MEETING, { flag: 'wx', encoding: 'utf8' }); } catch {}
-      }
-    } catch {}
+    const dir = ensureTemplatesDir(root);
     let templates = [];
     try {
       templates = fs.readdirSync(dir)
@@ -452,21 +475,25 @@ function startServer(opts = {}) {
   reportedDefault = defaultRoot;
   if (opts.configDir) CONFIG_FILE = path.join(opts.configDir, 'config.json');
 
-  // .env: si PERSONAL_ENV es truthy, sus rutas mandan (preset de máquina local).
+  // .env: si PERSONAL_ENV es truthy, sus rutas SIEMBRAN las raíces (semilla
+  // inicial). El cache real es config.json: una vez que el usuario cambia la
+  // carpeta desde Settings, ese valor manda y el .env deja de pisarlo en cada
+  // reinicio. Así las rutas se modifican sólo por Settings y persisten.
   const env = loadEnvFile();
   const personal = isTruthy(env.PERSONAL_ENV);
   const envMR = personal ? env.MR_ROOT_PATH : '';
   const envNT = personal ? env.NT_ROOT_PATH : '';
+  const cfg = loadConfig();
 
-  // Raíz del lector. Prioridad: CLI > .env (personal) > config.json > defaultRoot.
-  let root = path.resolve(opts.root || envMR || loadConfig().root || defaultRoot);
+  // Raíz del lector. Prioridad: CLI > config.json (cache) > .env (semilla) > default.
+  let root = path.resolve(opts.root || cfg.root || envMR || defaultRoot);
   if (!isDir(root)) root = isDir(defaultRoot) ? defaultRoot : DEFAULT_ROOT;
   currentRoot = root;
 
-  // Carpeta de notas (Note Taker). Prioridad: .env (personal) > config.json > Documentos.
+  // Carpeta de notas (Note Taker). Prioridad: config.json (cache) > .env (semilla) > Documentos.
   // No se mezcla con la raíz del lector: si la ruta configurada no existe, se
   // avisa con claridad y se cae a la carpeta por defecto (no a currentRoot).
-  const notesConfigured = envNT || loadConfig().notesRoot;
+  const notesConfigured = cfg.notesRoot || envNT;
   const nRoot = path.resolve(notesConfigured || defaultRoot);
   if (isDir(nRoot)) {
     notesRoot = nRoot;
@@ -475,6 +502,7 @@ function startServer(opts = {}) {
     console.warn(`      Usando ${defaultRoot}. Corregí NT_ROOT_PATH en .env o la carpeta en Settings.`);
     notesRoot = defaultRoot;
   }
+  ensureNotesScaffold(notesRoot); // garantiza Dailys/Reuniones/templates en la raíz de notas
 
   return new Promise((resolve, reject) => {
     const server = http.createServer(handleRequest);

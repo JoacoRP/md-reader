@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { api, type AppId, type FileKind, type TemplateInfo, type TreeDir, type TreeFile } from '../api/client';
+import { api, mockUrl, type AppId, type FileKind, type TemplateInfo, type TreeDir, type TreeFile } from '../api/client';
 import { useTree } from './treeStore';
 import { alertDialog, confirmDialog, promptDialog } from './dialogStore';
 
@@ -203,8 +203,16 @@ export const useApp = create<AppState>((set, get) => ({
     const st = get();
     if (st.currentContent != null || !st.currentPath) return st.currentContent != null;
     try {
-      const data = await api.getFile(st.currentPath, st.activeApp);
-      set({ currentContent: data.content, currentMtime: data.mtime });
+      if (st.currentKind === 'html') {
+        // Los mocks HTML se sirven crudos por /mock/ (no por /api/file, que sólo
+        // acepta md/txt). Así el "raw" muestra el código fuente del HTML.
+        const res = await fetch(mockUrl(st.currentPath));
+        if (!res.ok) throw new Error('No se pudo cargar el archivo');
+        set({ currentContent: await res.text(), currentMtime: 0 });
+      } else {
+        const data = await api.getFile(st.currentPath, st.activeApp);
+        set({ currentContent: data.content, currentMtime: data.mtime });
+      }
       return true;
     } catch {
       return false;

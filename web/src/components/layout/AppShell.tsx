@@ -26,6 +26,20 @@ export default function AppShell() {
     loadTree(activeApp);
   }, [activeApp, loadTree]);
 
+  // Auto-refresh periódico del árbol para detectar archivos nuevos. Se pausa
+  // mientras la pestaña está oculta y reconsulta al volver a foco.
+  useEffect(() => {
+    const tick = () => {
+      if (!document.hidden) loadTree(useApp.getState().activeApp);
+    };
+    const id = window.setInterval(tick, 15000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [loadTree]);
+
   // Puente para el menú nativo de Electron ("Abrir carpeta…").
   useEffect(() => {
     (window as unknown as { __mdChangeRoot?: (p: string) => void }).__mdChangeRoot = async (folder: string) => {
@@ -56,9 +70,9 @@ export default function AppShell() {
   }, []);
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <Box className="app-shell" sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Sidebar collapsed={collapsed} onCollapse={() => setCollapsed(true)} />
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Box className="app-main" sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Topbar
           sidebarCollapsed={collapsed}
           onExpandSidebar={() => setCollapsed(false)}

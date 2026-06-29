@@ -1,6 +1,6 @@
 {
   "name": "md-reader",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Lector local de Markdown y mocks HTML: tablas, Mermaid, resaltado, TOC, edición y estilos personalizables. Funciona como app de Windows o vía CLI.",
   "license": "MIT",
   "author": "Joaquin Rodriguez",

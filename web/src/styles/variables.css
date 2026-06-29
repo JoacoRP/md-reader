@@ -63,4 +63,39 @@ body,
   .no-print {
     display: none !important;
   }
+  /* Liberar la cadena de alturas fijas/overflow para que el contenido fluya en
+     varias páginas en lugar de recortarse a la primera (viewport). */
+  html,
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .app-shell,
+  .app-main,
+  .content-area,
+  .content-scroll {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .markdown-body {
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+  }
+  /* Evitar cortar bloques en el salto de página. */
+  .markdown-body pre,
+  .markdown-body table,
+  .markdown-body blockquote,
+  .markdown-body img,
+  .mermaid-block {
+    break-inside: avoid;
+  }
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3 {
+    break-after: avoid;
+  }
 }

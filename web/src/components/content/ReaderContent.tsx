@@ -70,10 +70,11 @@ export default function ReaderContent() {
   }
 
   return (
-    <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+    <Box className="content-area" sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
       <Box
         ref={scrollRef}
         onScroll={onScroll}
+        className="content-scroll"
         sx={{
           flex: 1,
           overflowY: 'auto',

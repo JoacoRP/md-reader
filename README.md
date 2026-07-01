@@ -68,14 +68,18 @@ Levanta **dos procesos** (vía `concurrently`): el backend Node (`server.js`, pu
 
 ### Producción / uso real (un solo proceso)
 
-Hay que compilar el frontend una vez y después servirlo con el backend:
+Es la opción de **mejor performance** en runtime: el frontend va compilado y minificado por Vite, sin el overhead del dev server. Es la recomendada si sólo querés **usar** la app (no tocar código). Hay que compilar el frontend una vez y después servirlo con el backend:
 
 ```bash
-npm run build        # compila web/dist
+npm run build        # compila web/dist  ⟵ imprescindible antes de arrancar
 npm start            # server.js sirve web/dist en http://localhost:4321
 ```
 
-Los launchers `start.cmd` / `start.ps1` / `start.sh` corren `node server.js` (requieren un `npm run build` previo).
+Los launchers `start.cmd` / `start.ps1` / `start.sh` corren `node server.js`, que sirve el frontend **desde `web/dist`**. Esa carpeta **no la genera `npm install`**: la crea `npm run build`.
+
+> ⚠️ **Si arrancás sin compilar** (`npm install` + `start.ps1` directo, sin `npm run build`), el server escucha en el puerto pero el browser muestra **`Not found`** porque `web/dist/index.html` no existe todavía. Solución: corré `npm run build` una vez. Si vas a **modificar el frontend**, recompilá tras cada cambio, o usá `npm run dev` (HMR) mientras desarrollás.
+
+**¿Cuál usar?** `npm run dev` para desarrollar (recarga en caliente, runtime más pesado); `npm run build` + launcher para usar la versión cerrada (mejor performance). Las dos conviven: son escenarios distintos.
 
 ### Detener (down)
 

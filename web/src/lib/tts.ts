@@ -134,6 +134,12 @@ export class TtsEngine {
   private index = 0;
   private status: TtsStatus = 'idle';
   private opts: SpeakOptions = { rate: 1 };
+  // Token de la utterance vigente: los callbacks de una cancelada llegan con un
+  // token viejo y se ignoran (evita avances dobles al saltar/detener).
+  private speakToken = 0;
+  // true cuando se saltó estando en pausa: al reanudar hay que rehablar la unidad
+  // destino (no se puede "resumir" una utterance ya cancelada).
+  private replayOnResume = false;
   onChange: (s: EngineState) => void = () => {};
 
   constructor(provider: TtsProvider) {
@@ -151,24 +157,25 @@ export class TtsEngine {
   }
 
   load(units: TtsUnit[]): void {
-    this.provider.cancel();
+    this.cancelSpeech();
     this.units = units;
     this.index = 0;
     this.status = 'idle';
+    this.replayOnResume = false;
     this.emit();
   }
 
   play(): void {
-    if (!this.units.length) return;
-    if (this.status === 'playing') return;
-    if (this.status === 'paused') {
+    if (!this.units.length || this.status === 'playing') return;
+    if (this.status === 'paused' && !this.replayOnResume) {
       this.status = 'playing';
       this.provider.resume();
       this.emit();
       return;
     }
-    // idle → arrancar desde la unidad actual
-    this.index = Math.min(this.index, this.units.length - 1);
+    // idle, o reanudar tras un salto en pausa → hablar la unidad actual de cero
+    this.replayOnResume = false;
+    this.index = Math.min(Math.max(this.index, 0), this.units.length - 1);
     this.status = 'playing';
     this.emit();
     this.speakCurrent();
@@ -177,6 +184,7 @@ export class TtsEngine {
   pause(): void {
     if (this.status !== 'playing') return;
     this.status = 'paused';
+    this.replayOnResume = false;
     this.provider.pause();
     this.emit();
   }
@@ -185,32 +193,70 @@ export class TtsEngine {
     if (this.status === 'idle' && this.index === 0) return;
     this.status = 'idle';
     this.index = 0;
-    this.provider.cancel();
+    this.replayOnResume = false;
+    this.cancelSpeech();
     this.emit();
+  }
+
+  next(): void {
+    this.seekTo(this.index + 1);
+  }
+
+  prev(): void {
+    this.seekTo(this.index - 1);
+  }
+
+  seekTo(target: number): void {
+    if (!this.units.length) return;
+    this.index = Math.min(Math.max(target, 0), this.units.length - 1);
+    if (this.status === 'playing') {
+      this.cancelSpeech();
+      this.emit();
+      this.speakCurrent();
+    } else if (this.status === 'paused') {
+      this.cancelSpeech();
+      this.replayOnResume = true; // la próxima reanudación rehabla la unidad destino
+      this.emit();
+    } else {
+      this.emit(); // idle: sólo movemos el cursor
+    }
   }
 
   private speakCurrent(): void {
     const unit = this.units[this.index];
     if (!unit) return this.finish();
+    const token = ++this.speakToken;
     this.emit();
     this.provider.speak(unit.text, this.opts, {
-      onEnd: () => this.advance(),
-      onError: () => this.advance(),
+      onEnd: () => {
+        if (token === this.speakToken) this.advance();
+      },
+      onError: () => {
+        if (token === this.speakToken) this.advance();
+      },
     });
   }
 
   private advance(): void {
     if (this.status !== 'playing') return; // pausado o detenido: no avanzar
+    if (this.index + 1 >= this.units.length) return this.finish();
     this.index += 1;
-    if (this.index >= this.units.length) return this.finish();
     this.speakCurrent();
   }
 
   private finish(): void {
     this.status = 'idle';
     this.index = 0;
-    this.provider.cancel();
+    this.replayOnResume = false;
+    this.cancelSpeech();
     this.emit();
+  }
+
+  // Invalida la utterance en curso: sube el token (para descartar su onEnd/onError
+  // tardío) y cancela en el provider.
+  private cancelSpeech(): void {
+    this.speakToken += 1;
+    this.provider.cancel();
   }
 
   private emit(): void {

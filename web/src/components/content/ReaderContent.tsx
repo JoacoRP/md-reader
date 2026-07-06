@@ -7,6 +7,7 @@ import MockFrame from './MockFrame';
 import MarkdownView, { type Heading } from './MarkdownView';
 import RawEditor from './RawEditor';
 import Toc from './Toc';
+import TtsPlayer from './TtsPlayer';
 
 // Área de contenido del lector: elige entre mock HTML (iframe), Markdown
 // formateado o editor de texto crudo, y maneja la TOC + scrollspy.
@@ -70,7 +71,7 @@ export default function ReaderContent() {
   }
 
   return (
-    <Box className="content-area" sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+    <Box className="content-area" sx={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
       <Box
         ref={scrollRef}
         onScroll={onScroll}
@@ -86,6 +87,7 @@ export default function ReaderContent() {
         {main}
       </Box>
       {showToc && <Toc headings={headings} activeId={activeId} onJump={jump} />}
+      <TtsPlayer />
     </Box>
   );
 }

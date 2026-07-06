@@ -16,6 +16,10 @@ interface TtsState {
   toggle: () => void;
   /** Detiene y resetea la lectura. */
   stop: () => void;
+  /** Salta a la oración siguiente. */
+  next: () => void;
+  /** Salta a la oración anterior. */
+  prev: () => void;
 }
 
 export const useTts = create<TtsState>((set, get) => {
@@ -52,5 +56,7 @@ export const useTts = create<TtsState>((set, get) => {
       void startFromDom(); // idle → cargar doc y arrancar
     },
     stop: () => engine.stop(),
+    next: () => engine.next(),
+    prev: () => engine.prev(),
   };
 });

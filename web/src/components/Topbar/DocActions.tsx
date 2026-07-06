@@ -9,7 +9,6 @@ import EditIcon from '@mui/icons-material/Edit';
 import SyncIcon from '@mui/icons-material/Sync';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
-import StopIcon from '@mui/icons-material/Stop';
 import { mockUrl } from '../../api/client';
 import { useApp } from '../../store/appStore';
 import { useUi } from '../../store/uiStore';
@@ -39,7 +38,6 @@ export default function DocActions() {
   const ttsAvailable = useTts((s) => s.available);
   const ttsStatus = useTts((s) => s.status);
   const ttsToggle = useTts((s) => s.toggle);
-  const ttsStop = useTts((s) => s.stop);
 
   if (!currentPath) return null;
 
@@ -94,14 +92,6 @@ export default function DocActions() {
           </IconButton>
         </Tooltip>
       )}
-      {canRead && ttsStatus !== 'idle' && (
-        <Tooltip title="Detener lectura">
-          <IconButton size="small" onClick={ttsStop}>
-            <StopIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      )}
-
       {!isTxt && (
         <Tooltip title={editing ? 'Ver formateado' : 'Ver original (raw)'}>
           <IconButton

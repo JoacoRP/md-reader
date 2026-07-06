@@ -10,10 +10,12 @@
 
 export type TtsStatus = 'idle' | 'playing' | 'paused';
 
-// Unidad mínima de lectura. En Fase 1 sólo lleva texto; en Fase 3 sumará la
-// referencia al nodo del DOM para resaltar/scrollear.
+// Unidad mínima de lectura: una oración (o sub-tramo). `range` apunta al texto
+// en el DOM para resaltarlo/scrollearlo (Fase 3); es opcional porque el motor
+// sólo necesita `text` y el resaltado degrada elegante si no hay soporte.
 export interface TtsUnit {
   text: string;
+  range?: Range;
 }
 
 export interface TtsVoice {
@@ -265,18 +267,20 @@ export class TtsEngine {
 }
 
 // --- Extracción de texto legible desde el DOM del Markdown ------------------
-// Recorre `.markdown-body` en orden, saltea código/diagramas/anclas, arma un
-// texto por bloque y lo parte en oraciones (Fase 3 refinará el mapeo a nodos).
+// Recorre `.markdown-body` en orden de documento, agrupa los nodos de texto por
+// su bloque contenedor (párrafo, ítem, encabezado, celda…), saltea código en
+// bloque/diagramas/anclas, y parte cada bloque en oraciones. Cada unidad guarda
+// un `Range` del DOM para resaltar/scrollear sin mutar el HTML renderizado.
 
-const SKIP_TAGS = new Set(['PRE', 'SCRIPT', 'STYLE', 'BUTTON', 'CODE']);
-const LEAF_BLOCKS = new Set([
+const BLOCK_TAGS = new Set([
   'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH', 'DT', 'DD', 'CAPTION', 'FIGCAPTION', 'BLOCKQUOTE',
 ]);
-// Si un bloque contiene alguno de estos, no es "hoja": hay que recursar.
-const NESTED_BLOCK_SEL = 'p,ul,ol,table,blockquote,pre,h1,h2,h3,h4,h5,h6,li,dl';
 
-function isSkippable(el: Element): boolean {
-  if (SKIP_TAGS.has(el.tagName)) return true;
+// Un ancestro que hace ignorar el texto que contiene: código en bloque (pre),
+// diagrama Mermaid, botón "Copiar" o el ancla "#" del heading.
+function isSkippableAncestor(el: Element): boolean {
+  const tag = el.tagName;
+  if (tag === 'PRE' || tag === 'SCRIPT' || tag === 'STYLE' || tag === 'BUTTON') return true;
   return (
     el.classList.contains('mermaid-block') ||
     el.classList.contains('copy-code') ||
@@ -284,85 +288,175 @@ function isSkippable(el: Element): boolean {
   );
 }
 
-// Texto de un bloque hoja, sin el "#" del ancla ni bloques de código.
-function cleanText(el: Element): string {
-  const clone = el.cloneNode(true) as Element;
-  clone.querySelectorAll('.heading-anchor, .copy-code, pre, .mermaid-block').forEach((n) => n.remove());
-  return (clone.textContent || '').replace(/\s+/g, ' ').trim();
+function textRejected(node: Node, root: Element): boolean {
+  let p = node.parentElement;
+  while (p && p !== root.parentElement) {
+    if (isSkippableAncestor(p)) return true;
+    p = p.parentElement;
+  }
+  return false;
 }
 
-// Texto propio de un contenedor (p. ej. "Item" antes de una sublista anidada).
-function directText(el: Element): string {
-  let s = '';
-  el.childNodes.forEach((n) => {
-    if (n.nodeType === Node.TEXT_NODE) s += n.textContent;
-  });
-  return s.replace(/\s+/g, ' ').trim();
+// Bloque contenedor más cercano de un nodo de texto (para no mezclar oraciones
+// entre párrafos). Si no hay uno conocido, cae al padre directo.
+function nearestBlock(node: Node, root: Element): Element {
+  let p = node.parentElement;
+  while (p && p !== root.parentElement) {
+    if (BLOCK_TAGS.has(p.tagName)) return p;
+    p = p.parentElement;
+  }
+  return node.parentElement || root;
 }
 
-function collectBlocks(el: Element, out: string[]): void {
-  for (const child of Array.from(el.children)) {
-    if (isSkippable(child)) continue;
-    const isLeaf = LEAF_BLOCKS.has(child.tagName) && !child.querySelector(NESTED_BLOCK_SEL);
-    if (isLeaf) {
-      const t = cleanText(child);
-      if (t) out.push(t);
-    } else {
-      const own = directText(child);
-      if (own) out.push(own);
-      collectBlocks(child, out);
+interface TextPiece {
+  node: Text;
+  start: number; // offset acumulado dentro del texto del bloque
+}
+
+// Construye un Range del DOM para el tramo [from, to) del texto del bloque,
+// mapeando cada offset al nodo de texto correspondiente.
+function makeRange(pieces: TextPiece[], from: number, to: number): Range | undefined {
+  if (!pieces.length) return undefined;
+  const locate = (o: number): [Text, number] => {
+    for (let i = 0; i < pieces.length; i++) {
+      const piece = pieces[i];
+      const end = piece.start + piece.node.length;
+      if (o < end || i === pieces.length - 1) {
+        return [piece.node, Math.max(0, Math.min(o - piece.start, piece.node.length))];
+      }
     }
+    const last = pieces[pieces.length - 1];
+    return [last.node, last.node.length];
+  };
+  try {
+    const [sn, so] = locate(from);
+    const [en, eo] = locate(to);
+    const range = document.createRange();
+    range.setStart(sn, so);
+    range.setEnd(en, eo);
+    return range;
+  } catch {
+    return undefined;
   }
 }
 
-function splitSentences(text: string, lang?: string): string[] {
-  const Seg = (Intl as unknown as { Segmenter?: new (l?: string, o?: object) => { segment(s: string): Iterable<{ segment: string }> } }).Segmenter;
+// Rangos [start, end) de cada oración dentro de `text`.
+function splitSentences(text: string, lang?: string): Array<[number, number]> {
+  const Seg = (Intl as unknown as {
+    Segmenter?: new (l?: string, o?: object) => { segment(s: string): Iterable<{ index: number; segment: string }> };
+  }).Segmenter;
+  const out: Array<[number, number]> = [];
   if (Seg) {
     try {
       const seg = new Seg(lang, { granularity: 'sentence' });
-      const out: string[] = [];
-      for (const part of seg.segment(text)) {
-        const t = part.segment.trim();
-        if (t) out.push(t);
-      }
-      return out.length ? out : [text];
+      for (const part of seg.segment(text)) out.push([part.index, part.index + part.segment.length]);
+      return out;
     } catch {
       /* sin soporte de Segmenter: caemos al regex de abajo */
     }
   }
-  return text
-    .split(/(?<=[.!?…])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const re = /[^.!?…]*[.!?…]+|\S[^.!?…]*$/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) out.push([m.index, m.index + m[0].length]);
+  return out.length ? out : [[0, text.length]];
 }
 
-// Parte oraciones muy largas para esquivar el corte de utterances de Chromium (~15s).
-function capLength(text: string, max: number): string[] {
-  if (text.length <= max) return [text];
-  const parts: string[] = [];
-  let rest = text;
-  while (rest.length > max) {
-    let cut = rest.lastIndexOf(',', max);
-    if (cut < max * 0.5) cut = rest.lastIndexOf(' ', max);
-    if (cut <= 0) cut = max;
-    parts.push(rest.slice(0, cut).trim());
-    rest = rest.slice(cut).trim();
+// Parte un tramo largo [s, e) en sub-tramos <= max, cortando en coma/espacio,
+// para esquivar el corte de utterances de Chromium (~15s).
+function capOffsets(text: string, s: number, e: number, max: number): Array<[number, number]> {
+  if (e - s <= max) return [[s, e]];
+  const parts: Array<[number, number]> = [];
+  let start = s;
+  while (e - start > max) {
+    let cut = text.lastIndexOf(',', start + max);
+    if (cut <= start) cut = text.lastIndexOf(' ', start + max);
+    if (cut <= start) cut = start + max;
+    parts.push([start, cut]);
+    start = cut;
+    while (start < e && /\s/.test(text[start])) start++;
   }
-  if (rest) parts.push(rest);
+  if (e - start > 0) parts.push([start, e]);
   return parts;
+}
+
+function trimOffsets(text: string, s: number, e: number): [number, number] {
+  while (s < e && /\s/.test(text[s])) s++;
+  while (e > s && /\s/.test(text[e - 1])) e--;
+  return [s, e];
 }
 
 export function extractUnits(root: Element | null, lang?: string): TtsUnit[] {
   if (!root) return [];
-  const blocks: string[] = [];
-  collectBlocks(root, blocks);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (textRejected(n, root) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+
   const units: TtsUnit[] = [];
-  for (const block of blocks) {
-    for (const sentence of splitSentences(block, lang)) {
-      for (const chunk of capLength(sentence, 220)) {
-        units.push({ text: chunk });
+  let block: Element | null = null;
+  let pieces: TextPiece[] = [];
+  let full = '';
+
+  const flush = () => {
+    if (full.trim()) {
+      for (const [ss, se] of splitSentences(full, lang)) {
+        for (const [cs, ce] of capOffsets(full, ss, se, 220)) {
+          const [ts, te] = trimOffsets(full, cs, ce);
+          const chunk = full.slice(ts, te);
+          if (chunk) units.push({ text: chunk, range: makeRange(pieces, ts, te) });
+        }
       }
     }
+    pieces = [];
+    full = '';
+  };
+
+  let node = walker.nextNode() as Text | null;
+  while (node) {
+    const b = nearestBlock(node, root);
+    if (b !== block && pieces.length) flush();
+    block = b;
+    pieces.push({ node, start: full.length });
+    full += node.data;
+    node = walker.nextNode() as Text | null;
   }
+  if (pieces.length) flush();
   return units;
+}
+
+// --- Resaltado + auto-scroll de la oración en curso (CSS Custom Highlight) ---
+
+const HIGHLIGHT_NAME = 'tts-active';
+
+interface HighlightRegistry {
+  set(name: string, hl: unknown): void;
+  delete(name: string): void;
+}
+
+function highlightRegistry(): HighlightRegistry | null {
+  const reg = (CSS as unknown as { highlights?: HighlightRegistry }).highlights;
+  return reg || null;
+}
+
+// Resalta el `range` dado (o limpia si es undefined). No-op si el navegador no
+// soporta la CSS Custom Highlight API: la lectura sigue funcionando igual.
+export function setTtsHighlight(range: Range | undefined): void {
+  const reg = highlightRegistry();
+  if (!reg) return;
+  const Ctor = (window as unknown as { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
+  if (!range || !Ctor) {
+    reg.delete(HIGHLIGHT_NAME);
+    return;
+  }
+  reg.set(HIGHLIGHT_NAME, new Ctor(range));
+}
+
+// Scrollea el contenedor lo mínimo para que la oración quede en una banda cómoda.
+export function scrollRangeIntoView(range: Range, container: HTMLElement): void {
+  const r = range.getBoundingClientRect();
+  if (!r.height && !r.width) return;
+  const c = container.getBoundingClientRect();
+  const topBand = c.top + c.height * 0.15;
+  const botBand = c.top + c.height * 0.78;
+  if (r.top >= topBand && r.bottom <= botBand) return; // ya está cómodo en pantalla
+  container.scrollBy({ top: r.top - (c.top + c.height * 0.32), behavior: 'smooth' });
 }

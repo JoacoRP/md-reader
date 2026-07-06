@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { TtsEngine, WebSpeechProvider, extractUnits, type TtsStatus } from '../lib/tts';
+import { TtsEngine, WebSpeechProvider, extractUnits, type TtsStatus, type TtsUnit } from '../lib/tts';
 
 // Estado reactivo del modo lector. La lógica imperativa (síntesis, cola, avance)
 // vive en TtsEngine; acá sólo exponemos estado + acciones para la UI.
@@ -12,6 +12,8 @@ interface TtsState {
   status: TtsStatus;
   index: number;
   total: number;
+  /** Unidades del documento en curso (con su Range) para resaltar la actual. */
+  units: TtsUnit[];
   /** Play/pausa/reanudar según el estado actual. */
   toggle: () => void;
   /** Detiene y resetea la lectura. */
@@ -41,6 +43,7 @@ export const useTts = create<TtsState>((set, get) => {
       engine.setOptions({ rate: 1, lang: 'es-ES' });
     }
     engine.load(units);
+    set({ units });
     engine.play();
   };
 
@@ -49,13 +52,17 @@ export const useTts = create<TtsState>((set, get) => {
     status: 'idle',
     index: 0,
     total: 0,
+    units: [],
     toggle: () => {
       const { status } = get();
       if (status === 'playing') return engine.pause();
       if (status === 'paused') return engine.play();
       void startFromDom(); // idle → cargar doc y arrancar
     },
-    stop: () => engine.stop(),
+    stop: () => {
+      engine.stop();
+      set({ units: [] });
+    },
     next: () => engine.next(),
     prev: () => engine.prev(),
   };

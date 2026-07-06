@@ -4,6 +4,7 @@ import { rawUrl } from '../../api/client';
 import { useApp } from '../../store/appStore';
 import { useSettings, resolveMermaidTheme } from '../../store/settingsStore';
 import { useTts } from '../../store/ttsStore';
+import { setTtsHighlight, scrollRangeIntoView } from '../../lib/tts';
 import {
   attachCopyButtons,
   renderMermaidIn,
@@ -32,7 +33,21 @@ export default function MarkdownView({ content, onHeadings, contentRef }: Markdo
   const activeApp = useApp((s) => s.activeApp);
   const openFile = useApp((s) => s.openFile);
   const settings = useSettings((s) => s.settings);
+  const ttsStatus = useTts((s) => s.status);
+  const ttsIndex = useTts((s) => s.index);
+  const ttsUnits = useTts((s) => s.units);
   const localRef = useRef<HTMLDivElement>(null);
+
+  // Modo lector: resalta la oración en curso y la mantiene a la vista.
+  useEffect(() => {
+    const range = ttsStatus !== 'idle' ? ttsUnits[ttsIndex]?.range : undefined;
+    setTtsHighlight(range);
+    if (range) {
+      const el = contentRef.current || localRef.current;
+      if (el?.parentElement) scrollRangeIntoView(range, el.parentElement);
+    }
+    return () => setTtsHighlight(undefined);
+  }, [ttsStatus, ttsIndex, ttsUnits, contentRef]);
 
   useEffect(() => {
     // Re-render (cambio de archivo/tema): la lectura en curso ya no aplica.

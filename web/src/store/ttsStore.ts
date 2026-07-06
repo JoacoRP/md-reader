@@ -1,11 +1,46 @@
 import { create } from 'zustand';
-import { TtsEngine, WebSpeechProvider, extractUnits, type TtsStatus, type TtsUnit } from '../lib/tts';
+import {
+  TtsEngine,
+  WebSpeechProvider,
+  extractUnits,
+  detectLang,
+  type TtsStatus,
+  type TtsUnit,
+  type TtsVoice,
+} from '../lib/tts';
 
 // Estado reactivo del modo lector. La lógica imperativa (síntesis, cola, avance)
-// vive en TtsEngine; acá sólo exponemos estado + acciones para la UI.
+// vive en TtsEngine; acá exponemos estado + acciones para la UI y persistimos las
+// preferencias (voz elegida + velocidad) en un key propio, aparte de los estilos.
 // Motor singleton a nivel módulo (una sola instancia por ventana).
 
 const engine = new TtsEngine(new WebSpeechProvider());
+const TTS_KEY = 'md-reader-tts';
+
+interface TtsPrefs {
+  voiceId: string | null; // null = automática (según idioma del documento)
+  rate: number;
+}
+
+function loadPrefs(): TtsPrefs {
+  try {
+    const p = JSON.parse(localStorage.getItem(TTS_KEY) || '{}');
+    return {
+      voiceId: typeof p.voiceId === 'string' ? p.voiceId : null,
+      rate: typeof p.rate === 'number' ? p.rate : 1,
+    };
+  } catch {
+    return { voiceId: null, rate: 1 };
+  }
+}
+
+function persistPrefs(p: TtsPrefs): void {
+  try {
+    localStorage.setItem(TTS_KEY, JSON.stringify(p));
+  } catch {
+    /* almacenamiento no disponible: best-effort */
+  }
+}
 
 interface TtsState {
   available: boolean;
@@ -14,6 +49,12 @@ interface TtsState {
   total: number;
   /** Unidades del documento en curso (con su Range) para resaltar la actual. */
   units: TtsUnit[];
+  /** Voces disponibles en el SO (se cargan async en Chromium). */
+  voices: TtsVoice[];
+  /** Voz elegida por el usuario, o null = automática por idioma. Persistida. */
+  voiceId: string | null;
+  /** Velocidad de lectura. Persistida. */
+  rate: number;
   /** Play/pausa/reanudar según el estado actual. */
   toggle: () => void;
   /** Detiene y resetea la lectura. */
@@ -22,26 +63,34 @@ interface TtsState {
   next: () => void;
   /** Salta a la oración anterior. */
   prev: () => void;
+  /** Fija la voz (o null = automática). Se aplica en vivo y se persiste. */
+  setVoice: (id: string | null) => void;
+  /** Fija la velocidad. Se aplica en vivo y se persiste. */
+  setRate: (rate: number) => void;
 }
 
 export const useTts = create<TtsState>((set, get) => {
   engine.onChange = ({ status, index, total }) => set({ status, index, total });
 
+  const prefs = loadPrefs();
+  engine.setOptions({ rate: prefs.rate, voiceId: prefs.voiceId ?? undefined });
+  // Cargamos las voces del SO (en Chromium llegan async vía 'voiceschanged').
+  engine
+    .getVoices()
+    .then((voices) => set({ voices }))
+    .catch(() => {});
+
   // Arranca desde el documento renderizado. Hay una sola `.markdown-body` en el
   // árbol, así que la buscamos directo (evita cablear refs por props).
-  const startFromDom = async () => {
+  const startFromDom = () => {
     const root = document.querySelector('.markdown-body');
-    const units = extractUnits(root, 'es');
+    if (!root) return;
+    const lang = detectLang(root.textContent || '');
+    const units = extractUnits(root, lang);
     if (!units.length) return;
-    // Heurística temporal: preferimos una voz en español si existe. La selección
-    // de voz/idioma real (por documento, persistida) es de la Fase 4.
-    try {
-      const voices = await engine.getVoices();
-      const es = voices.find((v) => v.lang.toLowerCase().startsWith('es'));
-      engine.setOptions({ rate: 1, voiceId: es?.id, lang: es?.lang || 'es-ES' });
-    } catch {
-      engine.setOptions({ rate: 1, lang: 'es-ES' });
-    }
+    const { voiceId, rate } = get();
+    // voiceId explícito manda; si es null, el provider elige por `lang`.
+    engine.setOptions({ rate, voiceId: voiceId ?? undefined, lang });
     engine.load(units);
     set({ units });
     engine.play();
@@ -53,11 +102,14 @@ export const useTts = create<TtsState>((set, get) => {
     index: 0,
     total: 0,
     units: [],
+    voices: [],
+    voiceId: prefs.voiceId,
+    rate: prefs.rate,
     toggle: () => {
       const { status } = get();
       if (status === 'playing') return engine.pause();
       if (status === 'paused') return engine.play();
-      void startFromDom(); // idle → cargar doc y arrancar
+      startFromDom(); // idle → cargar doc y arrancar
     },
     stop: () => {
       engine.stop();
@@ -65,5 +117,15 @@ export const useTts = create<TtsState>((set, get) => {
     },
     next: () => engine.next(),
     prev: () => engine.prev(),
+    setVoice: (id) => {
+      persistPrefs({ voiceId: id, rate: get().rate });
+      set({ voiceId: id });
+      engine.setOptions({ voiceId: id ?? undefined });
+    },
+    setRate: (rate) => {
+      persistPrefs({ voiceId: get().voiceId, rate });
+      set({ rate });
+      engine.setOptions({ rate });
+    },
   };
 });

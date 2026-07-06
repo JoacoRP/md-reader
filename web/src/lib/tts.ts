@@ -154,8 +154,18 @@ export class TtsEngine {
   getVoices(): Promise<TtsVoice[]> {
     return this.provider.getVoices();
   }
+  // Aplica opciones (voz/velocidad/idioma). Si hay lectura en curso, la refresca
+  // en vivo: re-habla la oración actual con las nuevas opciones (o la deja lista
+  // para la próxima reanudación si está en pausa).
   setOptions(o: Partial<SpeakOptions>): void {
     this.opts = { ...this.opts, ...o };
+    if (this.status === 'playing') {
+      this.cancelSpeech();
+      this.speakCurrent();
+    } else if (this.status === 'paused') {
+      this.cancelSpeech();
+      this.replayOnResume = true;
+    }
   }
 
   load(units: TtsUnit[]): void {
@@ -421,6 +431,18 @@ export function extractUnits(root: Element | null, lang?: string): TtsUnit[] {
   }
   if (pieces.length) flush();
   return units;
+}
+
+// Heurística simple es/en para elegir la voz por defecto según el documento.
+// Marcadores del español (¿ ¡ tildes/ñ) mandan; si no, gana el idioma con más
+// palabras funcionales; sin señales, cae a navigator.language.
+export function detectLang(sample: string): string {
+  const text = sample.slice(0, 2000).toLowerCase();
+  if (/[¿¡áéíóúñü]/.test(text)) return 'es';
+  const es = (text.match(/\b(el|la|los|las|de|que|y|en|un|una|por|con|para|es|se|del|al|su|lo)\b/g) || []).length;
+  const en = (text.match(/\b(the|and|of|to|in|is|that|for|with|on|as|are|be|this|it|by)\b/g) || []).length;
+  if (es === 0 && en === 0) return (navigator.language || 'es').slice(0, 2);
+  return es >= en ? 'es' : 'en';
 }
 
 // --- Resaltado + auto-scroll de la oración en curso (CSS Custom Highlight) ---

@@ -3,6 +3,7 @@ import { Box } from '@mui/material';
 import { rawUrl } from '../../api/client';
 import { useApp } from '../../store/appStore';
 import { useSettings, resolveMermaidTheme } from '../../store/settingsStore';
+import { useTts } from '../../store/ttsStore';
 import {
   attachCopyButtons,
   renderMermaidIn,
@@ -34,6 +35,8 @@ export default function MarkdownView({ content, onHeadings, contentRef }: Markdo
   const localRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Re-render (cambio de archivo/tema): la lectura en curso ya no aplica.
+    useTts.getState().stop();
     const el = contentRef.current || localRef.current;
     if (!el) return;
     el.innerHTML = toSafeHtml(content);
@@ -42,6 +45,7 @@ export default function MarkdownView({ content, onHeadings, contentRef }: Markdo
     renderMermaidIn(el, resolveMermaidTheme(settings));
     publishHeadings(el);
     if (el.parentElement) el.parentElement.scrollTop = 0;
+    return () => useTts.getState().stop(); // al desmontar (cerrar/editar) también frenamos
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, settings]);
 

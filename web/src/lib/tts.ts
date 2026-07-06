@@ -482,3 +482,43 @@ export function scrollRangeIntoView(range: Range, container: HTMLElement): void 
   if (r.top >= topBand && r.bottom <= botBand) return; // ya está cómodo en pantalla
   container.scrollBy({ top: r.top - (c.top + c.height * 0.32), behavior: 'smooth' });
 }
+
+// --- "Leer desde acá": mapear un punto de pantalla a una unidad --------------
+
+function caretPositionAt(x: number, y: number): { node: Node; offset: number } | null {
+  const doc = document as unknown as {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  if (doc.caretRangeFromPoint) {
+    const r = doc.caretRangeFromPoint(x, y);
+    if (r) return { node: r.startContainer, offset: r.startOffset };
+  }
+  if (doc.caretPositionFromPoint) {
+    const p = doc.caretPositionFromPoint(x, y);
+    if (p) return { node: p.offsetNode, offset: p.offset };
+  }
+  return null;
+}
+
+// Índice de la unidad cuya oración contiene el punto (x, y), o la inmediatamente
+// anterior si el click cayó en un hueco. -1 si no se pudo ubicar.
+export function unitIndexAtPoint(units: TtsUnit[], x: number, y: number): number {
+  const pos = caretPositionAt(x, y);
+  if (!pos) return -1;
+  let fallback = -1;
+  for (let i = 0; i < units.length; i++) {
+    const r = units[i].range;
+    if (!r) continue;
+    let cmp: number;
+    try {
+      cmp = r.comparePoint(pos.node, pos.offset);
+    } catch {
+      continue;
+    }
+    if (cmp === 0) return i; // el punto cae dentro de esta oración
+    if (cmp > 0) fallback = i; // el punto está después → candidata previa
+    else break; // la oración empieza después del punto: no hay match exacto
+  }
+  return fallback;
+}

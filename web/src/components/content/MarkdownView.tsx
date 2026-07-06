@@ -36,6 +36,7 @@ export default function MarkdownView({ content, onHeadings, contentRef }: Markdo
   const ttsStatus = useTts((s) => s.status);
   const ttsIndex = useTts((s) => s.index);
   const ttsUnits = useTts((s) => s.units);
+  const ttsReadFrom = useTts((s) => s.readFrom);
   const localRef = useRef<HTMLDivElement>(null);
 
   // Modo lector: resalta la oración en curso y la mantiene a la vista.
@@ -104,5 +105,17 @@ export default function MarkdownView({ content, onHeadings, contentRef }: Markdo
     );
   }
 
-  return <Box ref={contentRef ?? localRef} className="markdown-body" />;
+  // "Leer desde acá": Alt+Click arranca la lectura en el párrafo clickeado; con
+  // la lectura ya activa, un click simple salta a esa oración. Ignora links,
+  // código, diagramas y cuando el usuario está seleccionando texto.
+  function onBodyClick(e: React.MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (target.closest('a, pre, button, .mermaid-block')) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    if (!e.altKey && useTts.getState().status === 'idle') return;
+    ttsReadFrom(e.clientX, e.clientY);
+  }
+
+  return <Box ref={contentRef ?? localRef} className="markdown-body" onClick={onBodyClick} />;
 }

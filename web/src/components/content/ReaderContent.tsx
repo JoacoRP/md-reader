@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box } from '@mui/material';
 import { useApp } from '../../store/appStore';
 import { useUi } from '../../store/uiStore';
+import { useTts } from '../../store/ttsStore';
 import EmptyState from './EmptyState';
 import MockFrame from './MockFrame';
 import MarkdownView, { type Heading } from './MarkdownView';
@@ -32,6 +33,26 @@ export default function ReaderContent() {
   useEffect(() => {
     if (editing && currentKind === 'html' && currentContent == null) ensureContent();
   }, [editing, currentKind, currentContent, ensureContent]);
+
+  // Atajos del modo lector: espacio = play/pausa, Escape = detener. Sólo actúan
+  // con lectura activa y fuera de campos editables/botones (para no pisar el
+  // scroll con la barra, ni la escritura ni el foco de los controles).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName))) return;
+      const tts = useTts.getState();
+      if (tts.status === 'idle') return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        tts.toggle();
+      } else if (e.code === 'Escape') {
+        tts.stop();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Scrollspy: resalta el heading visible en la TOC.
   const onScroll = useCallback(() => {

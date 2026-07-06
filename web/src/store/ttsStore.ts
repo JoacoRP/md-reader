@@ -4,6 +4,7 @@ import {
   WebSpeechProvider,
   extractUnits,
   detectLang,
+  unitIndexAtPoint,
   type TtsStatus,
   type TtsUnit,
   type TtsVoice,
@@ -67,6 +68,8 @@ interface TtsState {
   setVoice: (id: string | null) => void;
   /** Fija la velocidad. Se aplica en vivo y se persiste. */
   setRate: (rate: number) => void;
+  /** Empieza (o salta) la lectura desde la oración bajo el punto de pantalla. */
+  readFrom: (x: number, y: number) => void;
 }
 
 export const useTts = create<TtsState>((set, get) => {
@@ -80,20 +83,25 @@ export const useTts = create<TtsState>((set, get) => {
     .then((voices) => set({ voices }))
     .catch(() => {});
 
-  // Arranca desde el documento renderizado. Hay una sola `.markdown-body` en el
-  // árbol, así que la buscamos directo (evita cablear refs por props).
-  const startFromDom = () => {
+  // Extrae las unidades del documento renderizado y las carga en el motor. Hay
+  // una sola `.markdown-body` en el árbol, así que la buscamos directo (evita
+  // cablear refs por props). Devuelve las unidades, o null si no hay nada que leer.
+  const buildAndLoad = (): TtsUnit[] | null => {
     const root = document.querySelector('.markdown-body');
-    if (!root) return;
+    if (!root) return null;
     const lang = detectLang(root.textContent || '');
     const units = extractUnits(root, lang);
-    if (!units.length) return;
+    if (!units.length) return null;
     const { voiceId, rate } = get();
     // voiceId explícito manda; si es null, el provider elige por `lang`.
     engine.setOptions({ rate, voiceId: voiceId ?? undefined, lang });
     engine.load(units);
     set({ units });
-    engine.play();
+    return units;
+  };
+
+  const startFromDom = () => {
+    if (buildAndLoad()) engine.play();
   };
 
   return {
@@ -126,6 +134,19 @@ export const useTts = create<TtsState>((set, get) => {
       persistPrefs({ voiceId: get().voiceId, rate });
       set({ rate });
       engine.setOptions({ rate });
+    },
+    readFrom: (x, y) => {
+      let units = get().units;
+      // En reposo (o sin unidades cargadas) construimos desde el DOM actual.
+      if (get().status === 'idle' || !units.length) {
+        const built = buildAndLoad();
+        if (!built) return;
+        units = built;
+      }
+      const idx = unitIndexAtPoint(units, x, y);
+      if (idx < 0) return;
+      engine.seekTo(idx);
+      engine.play();
     },
   };
 });

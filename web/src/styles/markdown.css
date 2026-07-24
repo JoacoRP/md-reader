@@ -16,6 +16,15 @@
   background: var(--md-bg-color);
 }
 
+/* Modo lector: resaltado de la oración en curso (CSS Custom Highlight API). */
+::highlight(tts-active) {
+  background-color: rgba(255, 209, 102, 0.5);
+  color: inherit;
+}
+[data-theme='dark'] ::highlight(tts-active) {
+  background-color: rgba(88, 166, 255, 0.32);
+}
+
 .empty-state {
   text-align: center;
   color: var(--ui-muted);

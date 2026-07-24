@@ -146,7 +146,11 @@ const MIME = {
   '.ttf': 'font/ttf',
   '.eot': 'application/vnd.ms-fontobject',
   '.map': 'application/json; charset=utf-8',
-  '.txt': 'text/plain; charset=utf-8'
+  '.txt': 'text/plain; charset=utf-8',
+  // Piper (modo lector, voz neuronal): el motor WASM necesita application/wasm
+  // para instanciar por streaming; el modelo .onnx y el .data de espeak van como
+  // octet-stream (se leen como ArrayBuffer, el MIME no importa).
+  '.wasm': 'application/wasm'
 };
 
 // Extensiones soportadas en el árbol y su "kind" para el ícono del cliente.

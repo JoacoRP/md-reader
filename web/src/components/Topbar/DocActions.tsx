@@ -7,9 +7,12 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import EditIcon from '@mui/icons-material/Edit';
 import SyncIcon from '@mui/icons-material/Sync';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
 import { mockUrl } from '../../api/client';
 import { useApp } from '../../store/appStore';
 import { useUi } from '../../store/uiStore';
+import { useTts } from '../../store/ttsStore';
 import { formatMeta } from '../../lib/format';
 
 const SAVE_UI: Record<string, { icon: React.ReactNode; text: string; color: string } | null> = {
@@ -32,6 +35,9 @@ export default function DocActions() {
   const toggleRaw = useApp((s) => s.toggleRaw);
   const toggleToc = useUi((s) => s.toggleToc);
   const tocOpen = useUi((s) => s.tocOpen);
+  const ttsAvailable = useTts((s) => s.available);
+  const ttsStatus = useTts((s) => s.status);
+  const ttsToggle = useTts((s) => s.toggle);
 
   if (!currentPath) return null;
 
@@ -39,6 +45,10 @@ export default function DocActions() {
   const editing = rawMode || isTxt || forceEditOnce;
   const isMock = currentKind === 'html' && !editing;
   const save = SAVE_UI[saveStatus];
+  // Modo lector: sólo sobre Markdown formateado (hay DOM y contenido cargado).
+  const canRead = ttsAvailable && !editing && !isMock && !isTxt && currentContent != null;
+  const ttsTitle =
+    ttsStatus === 'playing' ? 'Pausar lectura' : ttsStatus === 'paused' ? 'Reanudar lectura' : 'Escuchar documento';
 
   let meta = '';
   if (isMock) meta = 'Mock HTML';
@@ -71,6 +81,17 @@ export default function DocActions() {
         </Tooltip>
       )}
 
+      {canRead && (
+        <Tooltip title={ttsTitle}>
+          <IconButton
+            size="small"
+            onClick={ttsToggle}
+            sx={ttsStatus !== 'idle' ? { color: 'primary.main', bgcolor: 'var(--ui-active)' } : undefined}
+          >
+            {ttsStatus === 'playing' ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
+      )}
       {!isTxt && (
         <Tooltip title={editing ? 'Ver formateado' : 'Ver original (raw)'}>
           <IconButton

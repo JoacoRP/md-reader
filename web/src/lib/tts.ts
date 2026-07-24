@@ -168,6 +168,20 @@ export class TtsEngine {
     }
   }
 
+  // Cambia el backend de síntesis (SAPI ↔ Piper) en caliente. Cancela lo que se
+  // esté diciendo y, si venía reproduciendo, continúa desde la oración actual con
+  // el nuevo provider; si estaba en pausa, lo deja listo para la reanudación.
+  setProvider(provider: TtsProvider): void {
+    if (provider === this.provider) return;
+    this.cancelSpeech();
+    this.provider = provider;
+    if (this.status === 'playing') {
+      this.speakCurrent();
+    } else if (this.status === 'paused') {
+      this.replayOnResume = true;
+    }
+  }
+
   load(units: TtsUnit[]): void {
     this.cancelSpeech();
     this.units = units;

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Box,
   Button,
+  CircularProgress,
   Divider,
   Fade,
   IconButton,
@@ -20,8 +21,10 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import StopIcon from '@mui/icons-material/Stop';
 import RecordVoiceOverIcon from '@mui/icons-material/RecordVoiceOver';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import CheckIcon from '@mui/icons-material/Check';
 import { useTts } from '../../store/ttsStore';
+import { PIPER_VOICE } from '../../lib/piper';
 
 const RATES = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
@@ -40,6 +43,11 @@ export default function TtsPlayer() {
   const rate = useTts((s) => s.rate);
   const setVoice = useTts((s) => s.setVoice);
   const setRate = useTts((s) => s.setRate);
+  const quality = useTts((s) => s.quality);
+  const piperAvailable = useTts((s) => s.piperAvailable);
+  const piperStatus = useTts((s) => s.piperStatus);
+  const piperError = useTts((s) => s.piperError);
+  const setQuality = useTts((s) => s.setQuality);
 
   const [rateAnchor, setRateAnchor] = useState<null | HTMLElement>(null);
   const [voiceAnchor, setVoiceAnchor] = useState<null | HTMLElement>(null);
@@ -47,7 +55,23 @@ export default function TtsPlayer() {
   const active = status !== 'idle';
   const playing = status === 'playing';
   const pct = total > 0 ? ((index + 1) / total) * 100 : 0;
+  const neural = quality === 'neural';
+  const loadingPiper = piperStatus === 'loading';
   const currentVoice = voices.find((v) => v.id === voiceId);
+  // En modo neural la voz/velocidad del SO no aplican: Piper usa su única voz
+  // bundleada y una velocidad fija (length_scale del modelo).
+  const voiceTip = neural
+    ? `Voz: ${PIPER_VOICE.name}`
+    : currentVoice
+      ? `Voz: ${currentVoice.name}`
+      : 'Voz: automática';
+  const qualityTip = loadingPiper
+    ? 'Cargando voz neuronal…'
+    : neural
+      ? 'Alta calidad (Piper) — clic para volver a la voz del SO'
+      : piperStatus === 'error'
+        ? `No se pudo cargar Piper${piperError ? `: ${piperError}` : ''}. Usando voz del SO.`
+        : 'Activar alta calidad (voz neuronal Piper, offline)';
 
   return (
     <Fade in={active} unmountOnExit>
@@ -108,14 +132,17 @@ export default function TtsPlayer() {
 
         <Divider orientation="vertical" flexItem sx={{ my: 0.5 }} />
 
-        <Tooltip title="Velocidad de lectura">
-          <Button
-            size="small"
-            onClick={(e) => setRateAnchor(e.currentTarget)}
-            sx={{ minWidth: 46, color: 'text.secondary', fontSize: 12, fontWeight: 600 }}
-          >
-            {rate}×
-          </Button>
+        <Tooltip title={neural ? 'Piper usa una velocidad fija' : 'Velocidad de lectura'}>
+          <span>
+            <Button
+              size="small"
+              disabled={neural}
+              onClick={(e) => setRateAnchor(e.currentTarget)}
+              sx={{ minWidth: 46, color: 'text.secondary', fontSize: 12, fontWeight: 600 }}
+            >
+              {rate}×
+            </Button>
+          </span>
         </Tooltip>
         <Menu anchorEl={rateAnchor} open={!!rateAnchor} onClose={() => setRateAnchor(null)}>
           {RATES.map((r) => (
@@ -133,10 +160,16 @@ export default function TtsPlayer() {
           ))}
         </Menu>
 
-        <Tooltip title={currentVoice ? `Voz: ${currentVoice.name}` : 'Voz: automática'}>
-          <IconButton size="small" onClick={(e) => setVoiceAnchor(e.currentTarget)}>
-            <RecordVoiceOverIcon fontSize="small" />
-          </IconButton>
+        <Tooltip title={voiceTip}>
+          <span>
+            <IconButton
+              size="small"
+              disabled={neural}
+              onClick={(e) => setVoiceAnchor(e.currentTarget)}
+            >
+              <RecordVoiceOverIcon fontSize="small" />
+            </IconButton>
+          </span>
         </Tooltip>
         <Menu
           anchorEl={voiceAnchor}
@@ -169,6 +202,28 @@ export default function TtsPlayer() {
             </MenuItem>
           ))}
         </Menu>
+
+        {piperAvailable && (
+          <>
+            <Divider orientation="vertical" flexItem sx={{ my: 0.5 }} />
+            <Tooltip title={qualityTip}>
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={loadingPiper}
+                  onClick={() => setQuality(neural ? 'system' : 'neural')}
+                  sx={{ color: neural ? 'primary.main' : 'text.secondary' }}
+                >
+                  {loadingPiper ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    <AutoAwesomeIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </>
+        )}
       </Paper>
     </Fade>
   );

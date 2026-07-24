@@ -9,18 +9,29 @@ import {
   type TtsUnit,
   type TtsVoice,
 } from '../lib/tts';
+import { PiperProvider } from '../lib/piper';
 
 // Estado reactivo del modo lector. La lógica imperativa (síntesis, cola, avance)
 // vive en TtsEngine; acá exponemos estado + acciones para la UI y persistimos las
-// preferencias (voz elegida + velocidad) en un key propio, aparte de los estilos.
-// Motor singleton a nivel módulo (una sola instancia por ventana).
+// preferencias (voz, velocidad, calidad) en un key propio, aparte de los estilos.
+// Motor singleton a nivel módulo con dos providers intercambiables:
+//   - system (WebSpeech/SAPI): default, arranque instantáneo.
+//   - neural (Piper): "alta calidad", carga perezosa, con system de fallback.
 
-const engine = new TtsEngine(new WebSpeechProvider());
+const webProvider = new WebSpeechProvider();
+const piperProvider = new PiperProvider();
+const engine = new TtsEngine(webProvider);
 const TTS_KEY = 'md-reader-tts';
+
+/** Calidad de voz: 'system' = voces del SO (SAPI); 'neural' = Piper. */
+export type TtsQuality = 'system' | 'neural';
+/** Estado de carga del motor neuronal (Piper) para dar feedback en la UI. */
+export type PiperStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 interface TtsPrefs {
   voiceId: string | null; // null = automática (según idioma del documento)
   rate: number;
+  quality: TtsQuality;
 }
 
 function loadPrefs(): TtsPrefs {
@@ -29,9 +40,10 @@ function loadPrefs(): TtsPrefs {
     return {
       voiceId: typeof p.voiceId === 'string' ? p.voiceId : null,
       rate: typeof p.rate === 'number' ? p.rate : 1,
+      quality: p.quality === 'neural' ? 'neural' : 'system',
     };
   } catch {
-    return { voiceId: null, rate: 1 };
+    return { voiceId: null, rate: 1, quality: 'system' };
   }
 }
 
@@ -54,8 +66,16 @@ interface TtsState {
   voices: TtsVoice[];
   /** Voz elegida por el usuario, o null = automática por idioma. Persistida. */
   voiceId: string | null;
-  /** Velocidad de lectura. Persistida. */
+  /** Velocidad de lectura. Persistida. Sólo aplica a las voces del SO. */
   rate: number;
+  /** Calidad de voz activa (system/neural). Persistida. */
+  quality: TtsQuality;
+  /** Piper disponible en este entorno (WASM + OPFS + Audio). */
+  piperAvailable: boolean;
+  /** Estado de carga de Piper (para spinner / mensaje de error). */
+  piperStatus: PiperStatus;
+  /** Mensaje del último fallo de Piper, si cayó a system. */
+  piperError: string | null;
   /** Play/pausa/reanudar según el estado actual. */
   toggle: () => void;
   /** Detiene y resetea la lectura. */
@@ -64,10 +84,12 @@ interface TtsState {
   next: () => void;
   /** Salta a la oración anterior. */
   prev: () => void;
-  /** Fija la voz (o null = automática). Se aplica en vivo y se persiste. */
+  /** Fija la voz del SO (o null = automática). Se aplica en vivo y se persiste. */
   setVoice: (id: string | null) => void;
-  /** Fija la velocidad. Se aplica en vivo y se persiste. */
+  /** Fija la velocidad (voces del SO). Se aplica en vivo y se persiste. */
   setRate: (rate: number) => void;
+  /** Cambia la calidad (system/neural). Warm-up de Piper con fallback a system. */
+  setQuality: (q: TtsQuality) => void;
   /** Empieza (o salta) la lectura desde la oración bajo el punto de pantalla. */
   readFrom: (x: number, y: number) => void;
 }
@@ -82,6 +104,41 @@ export const useTts = create<TtsState>((set, get) => {
     .getVoices()
     .then((voices) => set({ voices }))
     .catch(() => {});
+
+  const piperAvailable = piperProvider.isAvailable();
+  // Honramos la preferencia neural: enrutamos el motor a Piper, pero NO lo
+  // cargamos en el arranque (60 MB + WASM). La carga es perezosa: ocurre en el
+  // primer play (ensureBackend), con spinner y fallback.
+  if (prefs.quality === 'neural' && piperAvailable) engine.setProvider(piperProvider);
+
+  const currentPrefs = (): TtsPrefs => ({
+    voiceId: get().voiceId,
+    rate: get().rate,
+    quality: get().quality,
+  });
+
+  // Garantiza el backend correcto antes de reproducir. En 'neural' hace el warm-up
+  // de Piper (siembra OPFS + carga el modelo) mostrando estado 'loading'; si falla,
+  // cae a las voces del SO y lo recuerda. Devuelve cuando se puede reproducir.
+  const ensureBackend = async (): Promise<void> => {
+    if (get().quality !== 'neural' || !get().piperAvailable) return;
+    if (get().piperStatus === 'ready') return;
+    set({ piperStatus: 'loading', piperError: null });
+    try {
+      await piperProvider.prepare();
+      engine.setProvider(piperProvider);
+      set({ piperStatus: 'ready' });
+    } catch (e) {
+      engine.setProvider(webProvider);
+      const quality: TtsQuality = 'system';
+      persistPrefs({ ...currentPrefs(), quality });
+      set({
+        quality,
+        piperStatus: 'error',
+        piperError: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
 
   // Extrae las unidades del documento renderizado y las carga en el motor. Hay
   // una sola `.markdown-body` en el árbol, así que la buscamos directo (evita
@@ -100,8 +157,10 @@ export const useTts = create<TtsState>((set, get) => {
     return units;
   };
 
-  const startFromDom = () => {
-    if (buildAndLoad()) engine.play();
+  const startFromDom = async () => {
+    if (!buildAndLoad()) return;
+    await ensureBackend();
+    engine.play();
   };
 
   return {
@@ -113,11 +172,15 @@ export const useTts = create<TtsState>((set, get) => {
     voices: [],
     voiceId: prefs.voiceId,
     rate: prefs.rate,
+    quality: prefs.quality === 'neural' && piperAvailable ? 'neural' : 'system',
+    piperAvailable,
+    piperStatus: 'idle',
+    piperError: null,
     toggle: () => {
       const { status } = get();
       if (status === 'playing') return engine.pause();
       if (status === 'paused') return engine.play();
-      startFromDom(); // idle → cargar doc y arrancar
+      void startFromDom(); // idle → cargar doc, asegurar backend y arrancar
     },
     stop: () => {
       engine.stop();
@@ -126,14 +189,29 @@ export const useTts = create<TtsState>((set, get) => {
     next: () => engine.next(),
     prev: () => engine.prev(),
     setVoice: (id) => {
-      persistPrefs({ voiceId: id, rate: get().rate });
+      persistPrefs({ ...currentPrefs(), voiceId: id });
       set({ voiceId: id });
       engine.setOptions({ voiceId: id ?? undefined });
     },
     setRate: (rate) => {
-      persistPrefs({ voiceId: get().voiceId, rate });
+      persistPrefs({ ...currentPrefs(), rate });
       set({ rate });
       engine.setOptions({ rate });
+    },
+    setQuality: (q) => {
+      if (q === get().quality) return;
+      if (q === 'neural' && !get().piperAvailable) return;
+      persistPrefs({ ...currentPrefs(), quality: q });
+      set({ quality: q });
+      if (q === 'system') {
+        engine.setProvider(webProvider);
+        set({ piperStatus: 'idle', piperError: null });
+        return;
+      }
+      // Warm-up inmediato al activar 'neural': feedback + detección de fallo. Si
+      // hay lectura en curso, engine.setProvider (dentro de ensureBackend) la
+      // continúa desde la oración actual con la voz neuronal.
+      void ensureBackend();
     },
     readFrom: (x, y) => {
       let units = get().units;
@@ -145,8 +223,11 @@ export const useTts = create<TtsState>((set, get) => {
       }
       const idx = unitIndexAtPoint(units, x, y);
       if (idx < 0) return;
-      engine.seekTo(idx);
-      engine.play();
+      void (async () => {
+        await ensureBackend();
+        engine.seekTo(idx);
+        engine.play();
+      })();
     },
   };
 });

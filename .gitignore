@@ -18,6 +18,10 @@ config.json
 # Salida del instalador (electron-builder)
 dist/
 
+# Binarios de Piper (modo lector, voz neuronal) — se bajan con `npm run fetch:piper`
+# (idempotente, corre como prebuild). ~90 MB: no se versionan, se empaquetan al buildear.
+web/public/piper/
+
 # Certificado de firma (privado y público generados) — NO versionar
 build/cert/
 

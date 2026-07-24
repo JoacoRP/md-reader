@@ -12,6 +12,34 @@ const RAW_KEY = 'md-reader-raw';
 
 export type SaveStatus = 'hidden' | 'clean' | 'dirty' | 'saving' | 'saved' | 'error';
 
+// La sub-app activa es identidad POR PESTAÑA: vive en el query param `?app=` de la
+// URL, propio de cada pestaña y estable ante reload o descarte de pestañas en 2º
+// plano (a diferencia de localStorage, que es global al origen y hacía que una
+// pestaña "heredara" la app de otra al recargarse). localStorage queda sólo como
+// *semilla* del default para pestañas NUEVAS (recuerda la última herramienta usada),
+// sin tocar a las pestañas ya abiertas.
+function parseApp(v: string | null): AppId | null {
+  return v === 'notes' || v === 'reader' ? v : null;
+}
+
+function appFromUrl(): AppId | null {
+  return parseApp(new URLSearchParams(window.location.search).get('app'));
+}
+
+function writeAppToUrl(app: AppId): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set('app', app);
+  // replaceState (en vez de asignar location.search, que recargaría) para no navegar
+  // y preservar el hash con el archivo abierto.
+  window.history.replaceState(window.history.state, '', url);
+}
+
+// Valor inicial: manda la URL; si no trae `?app=`, la última usada (localStorage); si
+// no, reader. Sembramos la URL con el valor resuelto para que la pestaña quede
+// autodescripta y un reload la mantenga.
+const initialApp: AppId = appFromUrl() ?? parseApp(localStorage.getItem(APP_KEY)) ?? 'reader';
+writeAppToUrl(initialApp);
+
 function inferKind(path: string): FileKind {
   if (/\.(html?|htm)$/i.test(path)) return 'html';
   if (/\.txt$/i.test(path)) return 'txt';
@@ -137,7 +165,7 @@ async function carryOverDailySections(content: string): Promise<string> {
 }
 
 export const useApp = create<AppState>((set, get) => ({
-  activeApp: localStorage.getItem(APP_KEY) === 'notes' ? 'notes' : 'reader',
+  activeApp: initialApp,
   currentPath: null,
   currentKind: 'md',
   currentContent: null,
@@ -153,7 +181,8 @@ export const useApp = create<AppState>((set, get) => ({
   setApp: async (app) => {
     if (app === get().activeApp) return;
     await get().flushRawEdits();
-    localStorage.setItem(APP_KEY, app);
+    localStorage.setItem(APP_KEY, app); // semilla del default para pestañas nuevas
+    writeAppToUrl(app); // identidad de ESTA pestaña (no afecta a las demás)
     const st = get();
     // Si el archivo abierto no pertenece a la app nueva (un .txt en el lector), cerralo.
     const closing = app !== 'notes' && st.currentKind === 'txt';

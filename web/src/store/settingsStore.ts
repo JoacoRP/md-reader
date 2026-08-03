@@ -5,7 +5,7 @@ import { create } from 'zustand';
 // existentes: el objeto crudo de Settings vive bajo STORAGE_KEY, y la lista de
 // presets custom bajo PRESETS_KEY. Por eso NO usamos el wrapper de persist.
 
-export const VERSION = '2.3.0';
+export const VERSION = '2.4.0';
 const STORAGE_KEY = 'md-reader-settings';
 const PRESETS_KEY = 'md-reader-presets';
 

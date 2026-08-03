@@ -7,6 +7,7 @@ import { marked, Renderer } from 'marked';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/common';
 import mermaid from 'mermaid';
+import { attachPanZoom, unlockSvgSize } from './panzoom';
 
 export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => (
@@ -118,8 +119,17 @@ export function toSafeHtml(md: string): string {
   });
 }
 
-// Renderiza todos los .mermaid-block dentro de rootEl con el tema dado.
-export async function renderMermaidIn(rootEl: HTMLElement, theme: string): Promise<void> {
+// Documento al que pertenecen los diagramas, para poder abrirlos en su propia
+// pestaña (/mermaid?path=…&i=…). Sin esto los controles de zoom siguen andando,
+// pero no se ofrece el link (por ejemplo en la preview de Ajustes).
+export interface MermaidCtx {
+  path: string;
+  app: string;
+}
+
+// Renderiza todos los .mermaid-block dentro de rootEl con el tema dado y les
+// agrega zoom/arrastre, para que un diagrama grande no quede ilegible.
+export async function renderMermaidIn(rootEl: HTMLElement, theme: string, ctx?: MermaidCtx): Promise<void> {
   const blocks = rootEl.querySelectorAll<HTMLElement>('.mermaid-block');
   if (!blocks.length) return;
   mermaid.initialize({ startOnLoad: false, theme: (theme as 'default') || 'default', securityLevel: 'loose' });
@@ -128,13 +138,79 @@ export async function renderMermaidIn(rootEl: HTMLElement, theme: string): Promi
     const renderId = 'mmd-' + mermaidRenderSeq++;
     try {
       const { svg } = await mermaid.render(renderId, code);
-      block.innerHTML = svg;
       block.classList.remove('mermaid-error');
+      mountMermaidViewer(block, svg, ctx);
     } catch (err) {
       block.classList.add('mermaid-error');
       block.textContent = 'Error en diagrama Mermaid:\n' + (err instanceof Error ? err.message : String(err));
     }
   }
+}
+
+// Arma el visor de un diagrama: viewport recortado + canvas transformable + barra
+// de herramientas. Los listeners viven en nodos que se descartan al re-renderizar
+// el documento, así que no hace falta limpiarlos a mano.
+function mountMermaidViewer(block: HTMLElement, svgMarkup: string, ctx?: MermaidCtx): void {
+  block.innerHTML = '';
+
+  const viewport = document.createElement('div');
+  viewport.className = 'mermaid-viewport';
+  viewport.title = 'Arrastrá para mover · Ctrl + rueda para zoom · doble clic para ajustar';
+
+  const canvas = document.createElement('div');
+  canvas.className = 'mermaid-canvas';
+  canvas.innerHTML = svgMarkup;
+  viewport.appendChild(canvas);
+  block.appendChild(viewport);
+
+  const svg = canvas.querySelector('svg');
+  const size = svg ? unlockSvgSize(svg) : null;
+
+  // El marco toma la altura del diagrama ya ajustado al ancho disponible, con un
+  // tope. Así uno chico no ocupa media pantalla y solo se recortan (y necesitan
+  // zoom/arrastre) los que de verdad no entran.
+  if (size) {
+    const availW = viewport.clientWidth || block.clientWidth;
+    const fitW = availW ? Math.min(1, availW / size.w) : 1;
+    const capH = Math.min(620, Math.round(window.innerHeight * 0.6));
+    viewport.style.height = `${Math.round(Math.max(120, Math.min(size.h * fitW, capH)))}px`;
+  }
+
+  const tools = document.createElement('div');
+  tools.className = 'mermaid-tools no-print';
+
+  const pz = attachPanZoom(viewport, canvas, { wheelNeedsModifier: true });
+
+  tools.appendChild(toolButton('−', 'Alejar', () => pz.zoomOut()));
+  tools.appendChild(toolButton('+', 'Acercar', () => pz.zoomIn()));
+  tools.appendChild(toolButton('⤢', 'Ajustar al marco', () => pz.fit()));
+
+  // El índice sale del id que puso el renderer (mermaid-N) y es estable por
+  // documento, así que la pestaña dedicada se puede recargar y compartir.
+  const index = Number((block.id || '').replace('mermaid-', ''));
+  if (ctx?.path && Number.isFinite(index)) {
+    const link = document.createElement('a');
+    link.className = 'mermaid-tool';
+    link.href = `/mermaid?path=${encodeURIComponent(ctx.path)}&i=${index}&app=${encodeURIComponent(ctx.app)}`;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.title = 'Abrir en una pestaña dedicada';
+    link.textContent = '↗';
+    tools.appendChild(link);
+  }
+
+  block.appendChild(tools);
+  requestAnimationFrame(() => pz.fit()); // esperar al layout para medir bien
+}
+
+function toolButton(label: string, title: string, onClick: () => void): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'mermaid-tool';
+  b.title = title;
+  b.textContent = label;
+  b.addEventListener('click', onClick);
+  return b;
 }
 
 // Conecta los botones "Copiar" de los bloques de código dentro de rootEl.

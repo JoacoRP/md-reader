@@ -93,6 +93,23 @@ body,
   .mermaid-block {
     break-inside: avoid;
   }
+  /* El visor de Mermaid recorta y transforma para el zoom en pantalla; al
+     imprimir hay que soltarlo y mostrar el diagrama entero. */
+  .mermaid-viewport {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .mermaid-canvas {
+    position: static !important;
+    transform: none !important;
+  }
+  .mermaid-canvas svg {
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
+  }
   .markdown-body h1,
   .markdown-body h2,
   .markdown-body h3 {

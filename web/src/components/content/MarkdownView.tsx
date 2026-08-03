@@ -58,7 +58,11 @@ export default function MarkdownView({ content, onHeadings, contentRef }: Markdo
     el.innerHTML = toSafeHtml(content);
     enhance(el);
     attachCopyButtons(el);
-    renderMermaidIn(el, resolveMermaidTheme(settings));
+    renderMermaidIn(
+      el,
+      resolveMermaidTheme(settings),
+      currentPath ? { path: currentPath, app: activeApp } : undefined,
+    );
     publishHeadings(el);
     if (el.parentElement) el.parentElement.scrollTop = 0;
     return () => useTts.getState().stop(); // al desmontar (cerrar/editar) también frenamos

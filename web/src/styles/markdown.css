@@ -181,16 +181,77 @@
   padding-left: 1em;
 }
 
-/* Mermaid */
+/* Mermaid: el diagrama vive en un viewport recortado con zoom/arrastre, para que
+   uno grande no quede achicado hasta ser ilegible. */
 .mermaid-block {
-  display: flex;
-  justify-content: center;
+  position: relative;
   background: var(--ui-panel);
   border: 1px solid var(--ui-border);
   border-radius: 8px;
-  padding: 16px;
+  padding: 0;
   margin: 0 0 1.2em;
-  overflow-x: auto;
+  overflow: hidden;
+}
+.mermaid-viewport {
+  position: relative;
+  height: 360px; /* fallback: al renderizar, JS la ajusta al alto real del diagrama */
+  max-height: 620px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none; /* el arrastre lo maneja el pointer handler */
+}
+.mermaid-viewport.is-grabbing {
+  cursor: grabbing;
+}
+.mermaid-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.mermaid-canvas svg {
+  display: block;
+}
+.mermaid-tools {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0.35;
+  transition: opacity 0.15s;
+}
+.mermaid-block:hover .mermaid-tools,
+.mermaid-tools:focus-within {
+  opacity: 1;
+}
+.mermaid-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  text-decoration: none;
+  color: var(--ui-text);
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.mermaid-tool:hover {
+  border-color: var(--ui-accent, #0969da);
+}
+/* En la pestaña dedicada el visor ocupa toda la ventana: hay que soltar las
+   alturas del visor inline (va después para ganarle por orden). */
+.mermaid-viewport--page {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  background: var(--ui-panel);
 }
 .mermaid-error {
   border: 1px solid #cf222e;

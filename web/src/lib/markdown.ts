@@ -94,12 +94,24 @@ export function configureMarked(): void {
   configured = true;
 }
 
+// El frontmatter YAML es metadata, no contenido: sin sacarlo, marked lo toma
+// como <hr> + setext heading y termina ensuciando el titulo, la TOC y el TTS.
+// Se exige al menos una linea `clave: valor` para no comerse un `---` usado
+// como separador al principio de un documento.
+const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
+
+function stripFrontmatter(md: string): string {
+  const m = FRONTMATTER.exec(md);
+  if (!m) return md;
+  return /^[A-Za-z_][\w.-]*[ \t]*:/m.test(m[1]) ? md.slice(m[0].length) : md;
+}
+
 // Markdown -> HTML sanitizado (string).
 export function toSafeHtml(md: string): string {
   configureMarked();
   resetSlugs();
   mermaidCounter = 0;
-  const raw = marked.parse(md, { async: false }) as string;
+  const raw = marked.parse(stripFrontmatter(md), { async: false }) as string;
   return DOMPurify.sanitize(raw, {
     ADD_TAGS: ['foreignObject'],
     ADD_ATTR: ['data-mermaid', 'target'],

@@ -15,6 +15,11 @@ config.json
 # Variables de entorno locales (rutas personales) — no se versiona
 .env
 
+# Biblioteca personal de estudio (skill `research-this`) — se lee con la app,
+# pero es contenido del usuario, no del proyecto. Anclado con `/` para no
+# matchear una futura carpeta `research` anidada en el código.
+/research/
+
 # Salida del instalador (electron-builder)
 dist/
 

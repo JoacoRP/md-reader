@@ -53,6 +53,22 @@ export default function AppShell() {
     };
   }, [changeRoot, closeTabsOfApp, flushAllTabs]);
 
+  // Puente para el menú "Pestañas" de Electron (Ctrl+Tab / Ctrl+W), que existe
+  // porque el browser se reserva esas teclas y una página no puede interceptarlas.
+  // close() avisa si había algo que cerrar: si no, el menú cierra la ventana.
+  useEffect(() => {
+    (window as unknown as { __mdTabs?: unknown }).__mdTabs = {
+      next: () => useApp.getState().cycleTab(1),
+      prev: () => useApp.getState().cycleTab(-1),
+      close: () => {
+        const st = useApp.getState();
+        if (!st.activeTabId) return false;
+        st.closeTab(st.activeTabId);
+        return true;
+      },
+    };
+  }, []);
+
   // Al arrancar la ventana: las pestañas de la sesión (sobreviven a un F5) más el
   // archivo que traiga el hash de la URL.
   useEffect(() => {

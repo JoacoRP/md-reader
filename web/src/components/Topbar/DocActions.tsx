@@ -3,6 +3,7 @@ import CodeIcon from '@mui/icons-material/Code';
 import ArticleIcon from '@mui/icons-material/Article';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import WebAssetIcon from '@mui/icons-material/WebAsset';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import EditIcon from '@mui/icons-material/Edit';
@@ -10,10 +11,19 @@ import SyncIcon from '@mui/icons-material/Sync';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import { mockUrl } from '../../api/client';
+import { docHref } from '../../lib/paths';
 import { selectActiveTab, useApp } from '../../store/appStore';
 import { useUi } from '../../store/uiStore';
 import { useTts } from '../../store/ttsStore';
 import { formatMeta } from '../../lib/format';
+
+// Las pestañas internas ya no duplican un documento (abrir uno abierto activa su
+// pestaña), así que este botón hace lo único que ellas no pueden: sacarlo a una
+// ventana propia para comparar dos documentos lado a lado. En la app de Windows
+// es una ventana de Markdown Reader; en modo CLI, una pestaña del browser.
+const ASIDE_TITLE = /electron/i.test(navigator.userAgent)
+  ? 'Abrir en una ventana aparte'
+  : 'Abrir en una pestaña del browser';
 
 const SAVE_UI: Record<string, { icon: React.ReactNode; text: string; color: string } | null> = {
   hidden: null,
@@ -29,6 +39,7 @@ export default function DocActions() {
   const currentKind = useApp((s) => selectActiveTab(s)?.kind ?? 'md');
   const currentContent = useApp((s) => selectActiveTab(s)?.content ?? null);
   const currentMtime = useApp((s) => selectActiveTab(s)?.mtime ?? 0);
+  const currentApp = useApp((s) => selectActiveTab(s)?.app ?? s.activeApp);
   const forceEditOnce = useApp((s) => selectActiveTab(s)?.forceEditOnce ?? false);
   const saveStatus = useApp((s) => selectActiveTab(s)?.saveStatus ?? 'hidden');
   const rawMode = useApp((s) => s.rawMode);
@@ -72,6 +83,12 @@ export default function DocActions() {
           {meta}
         </Typography>
       )}
+
+      <Tooltip title={ASIDE_TITLE}>
+        <IconButton size="small" component="a" href={docHref(currentPath, currentApp)} target="_blank" rel="noopener">
+          <WebAssetIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
 
       {isMock && (
         <Tooltip title="Abrir mock en pestaña nueva">

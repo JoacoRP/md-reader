@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Box } from '@mui/material';
 import Sidebar from '../Sidebar/Sidebar';
 import Topbar from '../Topbar/Topbar';
+import TabStrip from '../Topbar/TabStrip';
 import Breadcrumb from '../Topbar/Breadcrumb';
 import DocActions from '../Topbar/DocActions';
 import ReaderContent from '../content/ReaderContent';
@@ -59,6 +60,28 @@ export default function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Atajos de pestañas. Van con Ctrl+Alt y no con los Ctrl+Tab / Ctrl+W de
+  // siempre porque en el browser esas dos son teclas reservadas y la página no
+  // las puede interceptar; en la app de Windows el menú nativo suma esas.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || !e.altKey || e.shiftKey) return;
+      const st = useApp.getState();
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        st.cycleTab(1);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        st.cycleTab(-1);
+      } else if (e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        if (st.activeTabId) st.closeTab(st.activeTabId);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // Red de seguridad: guardar ediciones pendientes al cerrar/recargar.
   useEffect(() => {
     const onUnload = () => {
@@ -85,6 +108,7 @@ export default function AppShell() {
           center={<Breadcrumb path={currentPath} />}
           actions={<DocActions />}
         />
+        <TabStrip />
         <ReaderContent />
       </Box>
     </Box>

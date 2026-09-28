@@ -3,6 +3,7 @@ import { ListItemIcon, ListItemText, Menu, MenuItem, Snackbar } from '@mui/mater
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import TabIcon from '@mui/icons-material/Tab';
 import type { TreeFile } from '../../api/client';
 import { useApp } from '../../store/appStore';
 import { useTree } from '../../store/treeStore';
@@ -18,6 +19,7 @@ export interface CtxTarget {
 // Note Taker). El Snackbar vive fuera del Menu porque este se desmonta al cerrar.
 export default function TreeContextMenu({ target, onClose }: { target: CtxTarget | null; onClose: () => void }) {
   const isNotes = useApp((s) => s.activeApp === 'notes');
+  const openFile = useApp((s) => s.openFile);
   const renameFile = useApp((s) => s.renameFile);
   const deleteFile = useApp((s) => s.deleteFile);
   const root = useTree((s) => s.root);
@@ -46,6 +48,19 @@ export default function TreeContextMenu({ target, onClose }: { target: CtxTarget
           anchorReference="anchorPosition"
           anchorPosition={target.pos}
         >
+          <MenuItem
+            onClick={() => {
+              onClose();
+              // Desde el menú la pestaña nueva se activa; el click de rueda, que
+              // es el gesto para seguir navegando el árbol, la deja en el fondo.
+              if (target) openFile(target.file.path, target.file.kind, { newTab: true });
+            }}
+          >
+            <ListItemIcon>
+              <TabIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Abrir en pestaña nueva" />
+          </MenuItem>
           <MenuItem
             onClick={() => {
               onClose();

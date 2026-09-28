@@ -6,7 +6,7 @@ import TabStrip from '../Topbar/TabStrip';
 import Breadcrumb from '../Topbar/Breadcrumb';
 import DocActions from '../Topbar/DocActions';
 import ReaderContent from '../content/ReaderContent';
-import { selectActiveTab, useApp } from '../../store/appStore';
+import { bootstrapTabs, selectActiveTab, useApp } from '../../store/appStore';
 import { useTree } from '../../store/treeStore';
 import { useUi } from '../../store/uiStore';
 
@@ -14,7 +14,6 @@ import { useUi } from '../../store/uiStore';
 export default function AppShell() {
   const activeApp = useApp((s) => s.activeApp);
   const currentPath = useApp((s) => selectActiveTab(s)?.path ?? null);
-  const openFile = useApp((s) => s.openFile);
   const loadTree = useTree((s) => s.loadTree);
   const collapsed = useUi((s) => s.sidebarCollapsed);
   const setCollapsed = useUi((s) => s.setSidebarCollapsed);
@@ -54,10 +53,10 @@ export default function AppShell() {
     };
   }, [changeRoot, closeTabsOfApp, flushAllTabs]);
 
-  // Abrir el archivo del hash de la URL una sola vez al arrancar.
+  // Al arrancar la ventana: las pestañas de la sesión (sobreviven a un F5) más el
+  // archivo que traiga el hash de la URL.
   useEffect(() => {
-    if (location.hash.length > 1) openFile(decodeURIComponent(location.hash.slice(1)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    bootstrapTabs();
   }, []);
 
   // Atajos de pestañas. Van con Ctrl+Alt y no con los Ctrl+Tab / Ctrl+W de

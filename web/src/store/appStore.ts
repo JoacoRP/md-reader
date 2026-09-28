@@ -537,3 +537,82 @@ async function createNote(get: () => AppState, name: string, content: string, di
     await alertDialog({ title: 'No se pudo crear', message: e instanceof Error ? e.message : 'No se pudo crear la nota.' });
   }
 }
+
+// --- Sesión de la ventana ---------------------------------------------------
+// La barra de pestañas sobrevive a un F5 pero no a cerrar la app: vive en
+// sessionStorage, que es por ventana (o pestaña del browser), el mismo alcance
+// que ya tiene `?app=`. Guardamos sólo la identidad de cada documento: el
+// contenido se vuelve a leer del disco —así nunca se muestra una copia vieja— y
+// los borradores sin guardar los baja el beacon del beforeunload.
+
+const SESSION_KEY = 'md-reader-tabs';
+
+interface SessionTab {
+  app: AppId;
+  path: string;
+  kind: FileKind;
+}
+
+let lastSaved = '';
+
+function saveSession(s: AppState): void {
+  // El store cambia con cada tecla del editor; acá sólo importa qué documentos
+  // hay abiertos y cuál está activo.
+  const sig = s.tabs.map((t) => `${t.app}:${t.kind}:${t.path}`).join('|') + '#' + (s.activeTabId ?? '');
+  if (sig === lastSaved) return;
+  lastSaved = sig;
+  try {
+    const tabs: SessionTab[] = s.tabs.map((t) => ({ app: t.app, path: t.path, kind: t.kind }));
+    const active = s.tabs.findIndex((t) => t.id === s.activeTabId);
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ tabs, active }));
+  } catch {
+    /* almacenamiento no disponible: best-effort */
+  }
+}
+
+function readSession(): { tabs: SessionTab[]; active: number } {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(SESSION_KEY) || '{}');
+    const tabs: SessionTab[] = Array.isArray(raw.tabs)
+      ? raw.tabs.filter((t: SessionTab) => t && typeof t.path === 'string' && parseApp(t.app))
+      : [];
+    return { tabs, active: typeof raw.active === 'number' ? raw.active : -1 };
+  } catch {
+    return { tabs: [], active: -1 };
+  }
+}
+
+useApp.subscribe(saveSession);
+
+/**
+ * Abre lo que corresponda al arrancar la ventana: las pestañas de la sesión (un
+ * F5 las recupera) más el archivo que traiga el hash, que puede no estar en la
+ * sesión (link externo, ventana aparte recién abierta).
+ *
+ * No hace nada si ya hay pestañas vivas: al volver de Ajustes, AppShell se monta
+ * de nuevo y rearmar la lista tiraría el contenido y los borradores en memoria.
+ */
+export async function bootstrapTabs(): Promise<void> {
+  if (useApp.getState().tabs.length) return;
+
+  const saved = readSession();
+  const tabs = saved.tabs.map((t) => createTab(t.app, t.path, t.kind, false));
+  let active = saved.active;
+
+  const hashPath = window.location.hash.length > 1 ? decodeURIComponent(window.location.hash.slice(1)) : '';
+  if (hashPath) {
+    const app = appFromUrl() ?? useApp.getState().activeApp;
+    const exact = tabs.findIndex((t) => t.path === hashPath && t.app === app);
+    const found = exact >= 0 ? exact : tabs.findIndex((t) => t.path === hashPath);
+    if (found >= 0) {
+      active = found;
+    } else {
+      tabs.push(createTab(app, hashPath, inferKind(hashPath), false));
+      active = tabs.length - 1;
+    }
+  }
+
+  if (!tabs.length) return;
+  useApp.setState({ tabs });
+  await useApp.getState().activateTab(tabs[Math.min(Math.max(active, 0), tabs.length - 1)].id);
+}

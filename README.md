@@ -104,6 +104,14 @@ El server corre en primer plano: **`Ctrl + C`** en la terminal (o cerrá la vent
 - El **panel izquierdo** lista en cascada todos los `.md`/`.markdown`/`.mdx` y `.html`/`.htm` bajo la raíz. Las carpetas arrancan **colapsadas**; los tipos se distinguen por ícono (📄 markdown en azul, `</>` HTML en naranja).
 - Click en un **`.md`** → se renderiza formateado. Click en un **`.html`** → se muestra embebido en un **iframe** (con botón para abrirlo en pestaña nueva).
 
+### Varios documentos a la vez (pestañas)
+- **Click de rueda** (o `Ctrl + Click`) sobre un archivo del árbol, sobre un resultado de la búsqueda o sobre un link a otro `.md` dentro del documento: lo abre en una **pestaña nueva en segundo plano**, sin moverte de lo que estás leyendo. El menú contextual (clic derecho) tiene **Abrir en pestaña nueva**, que sí te lleva a ella.
+- La barra de pestañas está arriba del documento: click para cambiar, **click de rueda para cerrar**, y un punto marca las que tienen cambios sin guardar. Cada pestaña recuerda **dónde ibas leyendo** y tiene su propio borrador; abrir un archivo que ya está abierto va a su pestaña en vez de duplicarlo.
+- Un lector y un Note Taker pueden convivir abiertos: cada pestaña sabe de qué herramienta es, y al activarla el panel lateral la sigue.
+- Las pestañas sobreviven a un **recargar** (F5), pero no a cerrar la app: cada arranque empieza limpio.
+- **Atajos:** `Ctrl + Alt + ←/→` cambia de pestaña y `Ctrl + Alt + W` cierra la actual (funcionan igual en la app y en el browser). En la app de Windows están además los de siempre en el menú **Pestañas**: `Ctrl + Tab`, `Ctrl + Shift + Tab` y `Ctrl + W` — el browser se reserva esos dos últimos y una página web no los puede interceptar.
+- Para comparar dos documentos **lado a lado**, el botón 🗔 de la barra superior (o `Shift + Click` en el árbol) abre el documento en una **ventana aparte**: en la app de Windows es otra ventana de Markdown Reader, que podés acoplar con Snap; vía CLI, una pestaña del browser.
+
 ### Buscar
 - Buscador con **switch archivos / carpetas**: buscá por nombre de archivo, o cambiá a modo carpeta para encontrar una carpeta puntual (p. ej. su `README`) y verla revelada con su contenido.
 - `Ctrl/Cmd + K` enfoca el buscador.
@@ -130,7 +138,7 @@ El server corre en primer plano: **`Ctrl + C`** en la terminal (o cerrá la vent
 ### Otros
 - **Tabla de contenidos** flotante con seguimiento de scroll (botón de TOC).
 - **Imprimir / exportar a PDF** (🖨 → "Guardar como PDF").
-- **Deep links:** la URL refleja el archivo abierto (`#<ruta>`), se puede compartir o recargar.
+- **Deep links:** la URL refleja el archivo abierto (`?app=<herramienta>#<ruta>`), se puede compartir o recargar, y es lo que usan las ventanas aparte.
 
 ---
 

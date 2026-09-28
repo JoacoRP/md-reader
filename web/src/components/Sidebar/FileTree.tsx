@@ -9,7 +9,7 @@ import CodeOutlinedIcon from '@mui/icons-material/CodeOutlined';
 import TextSnippetOutlinedIcon from '@mui/icons-material/TextSnippetOutlined';
 import type { FileKind, TreeDir, TreeFile, TreeNode } from '../../api/client';
 import { useTree } from '../../store/treeStore';
-import { useApp } from '../../store/appStore';
+import { selectActiveTab, useApp } from '../../store/appStore';
 import { ancestorDirs, computeFilter } from './treeFilter';
 
 const KIND_ICON: Record<FileKind, { Icon: typeof DescriptionOutlinedIcon; color: string }> = {
@@ -26,7 +26,12 @@ export default function FileTree({ onContextMenu }: FileTreeProps) {
   const tree = useTree((s) => s.tree);
   const searchMode = useTree((s) => s.searchMode);
   const query = useTree((s) => s.query);
-  const currentPath = useApp((s) => s.currentPath);
+  // Resaltamos la fila del documento activo sólo si su pestaña pertenece a la
+  // sub-app que el árbol está mostrando (la misma ruta puede existir en las dos).
+  const currentPath = useApp((s) => {
+    const t = selectActiveTab(s);
+    return t && t.app === s.activeApp ? t.path : null;
+  });
   const openFile = useApp((s) => s.openFile);
 
   // Carpetas expandidas por el usuario (arrancan todas colapsadas).

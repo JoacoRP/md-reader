@@ -10,7 +10,7 @@ import SyncIcon from '@mui/icons-material/Sync';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import { mockUrl } from '../../api/client';
-import { useApp } from '../../store/appStore';
+import { selectActiveTab, useApp } from '../../store/appStore';
 import { useUi } from '../../store/uiStore';
 import { useTts } from '../../store/ttsStore';
 import { formatMeta } from '../../lib/format';
@@ -25,13 +25,13 @@ const SAVE_UI: Record<string, { icon: React.ReactNode; text: string; color: stri
 };
 
 export default function DocActions() {
-  const currentPath = useApp((s) => s.currentPath);
-  const currentKind = useApp((s) => s.currentKind);
-  const currentContent = useApp((s) => s.currentContent);
-  const currentMtime = useApp((s) => s.currentMtime);
+  const currentPath = useApp((s) => selectActiveTab(s)?.path ?? null);
+  const currentKind = useApp((s) => selectActiveTab(s)?.kind ?? 'md');
+  const currentContent = useApp((s) => selectActiveTab(s)?.content ?? null);
+  const currentMtime = useApp((s) => selectActiveTab(s)?.mtime ?? 0);
+  const forceEditOnce = useApp((s) => selectActiveTab(s)?.forceEditOnce ?? false);
+  const saveStatus = useApp((s) => selectActiveTab(s)?.saveStatus ?? 'hidden');
   const rawMode = useApp((s) => s.rawMode);
-  const forceEditOnce = useApp((s) => s.forceEditOnce);
-  const saveStatus = useApp((s) => s.saveStatus);
   const toggleRaw = useApp((s) => s.toggleRaw);
   const toggleToc = useUi((s) => s.toggleToc);
   const tocOpen = useUi((s) => s.tocOpen);

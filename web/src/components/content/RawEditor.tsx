@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import { useApp } from '../../store/appStore';
+import { selectActiveTab, useApp } from '../../store/appStore';
 
 const TAB = '\t';
 
@@ -7,16 +7,19 @@ const TAB = '\t';
 // volver a la vista formateada / cambiar de archivo / cerrar (lo maneja el store
 // vía flushRawEdits). cozy = tipografía de lectura para notas (.txt o .md nuevas).
 export default function RawEditor({ initial, cozy }: { initial: string; cozy: boolean }) {
-  const draft = useApp((s) => s.draft);
+  const draft = useApp((s) => selectActiveTab(s)?.draft ?? null);
   const setEditorContent = useApp((s) => s.setEditorContent);
   const flushRawEdits = useApp((s) => s.flushRawEdits);
   const ref = useRef<HTMLTextAreaElement>(null);
   // Selección a restaurar tras un cambio programático (Tab indenta sin perder caret).
   const pendingSel = useRef<[number, number] | null>(null);
 
-  // Sembrar el borrador con el contenido del archivo al montar/cambiar.
+  // Sembrar el borrador con el contenido del archivo al montar/cambiar. Si la
+  // pestaña ya trae borrador (p.ej. un guardado que falló y su texto es la única
+  // copia), se respeta: sembrar lo pisaría. El componente se monta por pestaña
+  // (key={tabId} en ReaderContent), así que esto corre una vez por documento.
   useEffect(() => {
-    setEditorContent(initial);
+    if (selectActiveTab(useApp.getState())?.draft == null) setEditorContent(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
 

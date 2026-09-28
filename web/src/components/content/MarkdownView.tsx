@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Box } from '@mui/material';
 import { rawUrl } from '../../api/client';
-import { useApp } from '../../store/appStore';
+import { selectActiveTab, useApp } from '../../store/appStore';
 import { useSettings, resolveMermaidTheme } from '../../store/settingsStore';
 import { useTts } from '../../store/ttsStore';
 import { setTtsHighlight, scrollRangeIntoView } from '../../lib/tts';
@@ -29,8 +29,10 @@ interface MarkdownViewProps {
 // imágenes relativas, conecta los botones Copiar, dibuja los diagramas Mermaid
 // y publica los headings para la TOC.
 export default function MarkdownView({ content, onHeadings, contentRef }: MarkdownViewProps) {
-  const currentPath = useApp((s) => s.currentPath);
-  const activeApp = useApp((s) => s.activeApp);
+  const currentPath = useApp((s) => selectActiveTab(s)?.path ?? null);
+  // La sub-app sale de la PESTAÑA, no de la global: una nota abierta mientras el
+  // árbol muestra el lector tiene que resolver sus imágenes contra la raíz de notas.
+  const activeApp = useApp((s) => selectActiveTab(s)?.app ?? s.activeApp);
   const openFile = useApp((s) => s.openFile);
   const settings = useSettings((s) => s.settings);
   const ttsStatus = useTts((s) => s.status);

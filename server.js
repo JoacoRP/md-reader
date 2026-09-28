@@ -317,7 +317,7 @@ async function handleRequest(req, res) {
     if (!target) return sendJSON(res, 400, { error: 'Invalid path' });
     if (!/\.(md|markdown|mdx|txt)$/i.test(target)) return sendJSON(res, 400, { error: 'Tipo de archivo no legible' });
     fs.readFile(target, 'utf8', (err, content) => {
-      if (err) return sendJSON(res, 404, { error: 'File not found' });
+      if (err) return sendJSON(res, 404, { error: 'El archivo no existe.' });
       let mtime = 0;
       try { mtime = fs.statSync(target).mtimeMs; } catch {}
       sendJSON(res, 200, { path: rel, content, mtime });

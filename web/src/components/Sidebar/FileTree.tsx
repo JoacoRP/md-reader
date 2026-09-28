@@ -4,19 +4,12 @@ import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
-import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
-import CodeOutlinedIcon from '@mui/icons-material/CodeOutlined';
-import TextSnippetOutlinedIcon from '@mui/icons-material/TextSnippetOutlined';
-import type { FileKind, TreeDir, TreeFile, TreeNode } from '../../api/client';
+import type { TreeDir, TreeFile, TreeNode } from '../../api/client';
 import { useTree } from '../../store/treeStore';
-import { useApp } from '../../store/appStore';
+import { selectActiveTab, useApp, type OpenOpts } from '../../store/appStore';
+import { KIND_ICON } from '../../lib/fileIcons';
+import { docHref } from '../../lib/paths';
 import { ancestorDirs, computeFilter } from './treeFilter';
-
-const KIND_ICON: Record<FileKind, { Icon: typeof DescriptionOutlinedIcon; color: string }> = {
-  md: { Icon: DescriptionOutlinedIcon, color: '#4577c0' },
-  html: { Icon: CodeOutlinedIcon, color: '#e44d26' },
-  txt: { Icon: TextSnippetOutlinedIcon, color: '#6b7785' },
-};
 
 interface FileTreeProps {
   onContextMenu?: (e: React.MouseEvent, file: TreeFile) => void;
@@ -26,8 +19,14 @@ export default function FileTree({ onContextMenu }: FileTreeProps) {
   const tree = useTree((s) => s.tree);
   const searchMode = useTree((s) => s.searchMode);
   const query = useTree((s) => s.query);
-  const currentPath = useApp((s) => s.currentPath);
+  // Resaltamos la fila del documento activo sólo si su pestaña pertenece a la
+  // sub-app que el árbol está mostrando (la misma ruta puede existir en las dos).
+  const currentPath = useApp((s) => {
+    const t = selectActiveTab(s);
+    return t && t.app === s.activeApp ? t.path : null;
+  });
   const openFile = useApp((s) => s.openFile);
+  const activeApp = useApp((s) => s.activeApp);
 
   // Carpetas expandidas por el usuario (arrancan todas colapsadas).
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -43,6 +42,23 @@ export default function FileTree({ onContextMenu }: FileTreeProps) {
   }, [currentPath]);
 
   const filter = useMemo(() => computeFilter(tree, searchMode, query), [tree, searchMode, query]);
+
+  // La fila de archivo es un link de verdad (ver docHref): así el click de rueda
+  // no dispara el autoscroll y se ve a dónde apunta. Igual lo abrimos nosotros en
+  // una pestaña interna, salvo con Shift, que se deja pasar para que el browser
+  // (o Electron) abra el documento en una ventana aparte.
+  const open = (e: React.MouseEvent, node: TreeFile, opts: OpenOpts) => {
+    e.preventDefault();
+    openFile(node.path, node.kind, opts);
+  };
+  const onRowClick = (e: React.MouseEvent, node: TreeFile) => {
+    if (e.shiftKey) return;
+    open(e, node, e.ctrlKey || e.metaKey ? { newTab: true, background: true } : {});
+  };
+  const onRowAux = (e: React.MouseEvent, node: TreeFile) => {
+    if (e.button !== 1) return; // rueda
+    open(e, node, { newTab: true, background: true });
+  };
 
   const toggle = (path: string) =>
     setExpanded((prev) => {
@@ -70,8 +86,11 @@ export default function FileTree({ onContextMenu }: FileTreeProps) {
       return (
         <Box
           key={node.path}
-          onClick={() => openFile(node.path, node.kind)}
-          onContextMenu={(e) => onContextMenu?.(e, node)}
+          component="a"
+          href={docHref(node.path, activeApp)}
+          onClick={(e: React.MouseEvent) => onRowClick(e, node)}
+          onAuxClick={(e: React.MouseEvent) => onRowAux(e, node)}
+          onContextMenu={(e: React.MouseEvent) => onContextMenu?.(e, node)}
           sx={rowSx(depth, active)}
         >
           <Box component="span" sx={{ width: 16, flexShrink: 0 }} />
@@ -123,6 +142,8 @@ function rowSx(depth: number, active: boolean) {
     borderRadius: 1,
     cursor: 'pointer',
     userSelect: 'none',
+    color: 'inherit', // las filas de archivo son <a>: sin color ni subrayado de link
+    textDecoration: 'none',
     fontWeight: active ? 600 : 400,
     bgcolor: active ? 'var(--ui-active)' : 'transparent',
     '&:hover': { bgcolor: active ? 'var(--ui-active)' : 'var(--ui-hover)' },

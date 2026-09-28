@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { Box } from '@mui/material';
 import { rawUrl } from '../../api/client';
-import { useApp } from '../../store/appStore';
+import { docHref } from '../../lib/paths';
+import { selectActiveTab, useApp } from '../../store/appStore';
 import { useSettings, resolveMermaidTheme } from '../../store/settingsStore';
 import { useTts } from '../../store/ttsStore';
 import { setTtsHighlight, scrollRangeIntoView } from '../../lib/tts';
@@ -29,8 +30,10 @@ interface MarkdownViewProps {
 // imágenes relativas, conecta los botones Copiar, dibuja los diagramas Mermaid
 // y publica los headings para la TOC.
 export default function MarkdownView({ content, onHeadings, contentRef }: MarkdownViewProps) {
-  const currentPath = useApp((s) => s.currentPath);
-  const activeApp = useApp((s) => s.activeApp);
+  const currentPath = useApp((s) => selectActiveTab(s)?.path ?? null);
+  // La sub-app sale de la PESTAÑA, no de la global: una nota abierta mientras el
+  // árbol muestra el lector tiene que resolver sus imágenes contra la raíz de notas.
+  const activeApp = useApp((s) => selectActiveTab(s)?.app ?? s.activeApp);
   const openFile = useApp((s) => s.openFile);
   const settings = useSettings((s) => s.settings);
   const ttsStatus = useTts((s) => s.status);
@@ -84,9 +87,24 @@ export default function MarkdownView({ content, onHeadings, contentRef }: Markdo
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
       } else if (/\.(md|markdown|mdx)$/i.test(href)) {
+        // Link a otro documento: lo reapuntamos a su URL real (así el click de
+        // rueda no hace autoscroll y se ve el destino) y lo abrimos nosotros.
+        // Rueda y Ctrl+Click lo mandan a una pestaña nueva de fondo, para seguir
+        // una referencia sin perder el lugar; Shift pasa de largo y lo abre en
+        // una ventana aparte.
+        const target = resolveRelative(currentPath, href);
+        a.href = docHref(target, activeApp);
+        const openAside = () => openFile(target, undefined, { newTab: true, background: true });
         a.addEventListener('click', (e) => {
+          if (e.shiftKey) return;
           e.preventDefault();
-          openFile(resolveRelative(currentPath, href));
+          if (e.ctrlKey || e.metaKey) openAside();
+          else openFile(target);
+        });
+        a.addEventListener('auxclick', (e) => {
+          if (e.button !== 1) return;
+          e.preventDefault();
+          openAside();
         });
       }
     });

@@ -23,12 +23,15 @@ export default function RootCard({ which, title }: { which: 'reader' | 'notes'; 
     if (!p) return;
     setMsg({ text: 'Guardando…', ok: true });
     try {
+      // Guardar lo pendiente ANTES de mover la raíz: después, los paths relativos
+      // de las pestañas se resolverían contra la carpeta nueva.
+      await useApp.getState().flushAllTabs();
       const d = await api.setRoot(p, which === 'notes' ? 'notes' : undefined);
       setPath(which === 'notes' ? d.notesRoot : d.root);
-      // Si es la sub-app activa, refrescamos el árbol y cerramos el documento
-      // abierto (puede pertenecer a la raíz anterior).
+      // Las pestañas de esta sub-app quedaron colgadas (sus rutas eran relativas
+      // a la raíz anterior), sea o no la sub-app que muestra el panel lateral.
+      await useApp.getState().closeTabsOfApp(which);
       if (useApp.getState().activeApp === which) {
-        useApp.getState().closeFile();
         useTree.getState().loadTree(which);
       }
       setMsg({ text: 'Carpeta actualizada.', ok: true });

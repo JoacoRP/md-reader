@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box } from '@mui/material';
-import { useApp } from '../../store/appStore';
+import { selectActiveTab, useApp } from '../../store/appStore';
 import { useUi } from '../../store/uiStore';
 import { useTts } from '../../store/ttsStore';
 import EmptyState from './EmptyState';
@@ -13,11 +13,15 @@ import TtsPlayer from './TtsPlayer';
 // Área de contenido del lector: elige entre mock HTML (iframe), Markdown
 // formateado o editor de texto crudo, y maneja la TOC + scrollspy.
 export default function ReaderContent() {
-  const currentPath = useApp((s) => s.currentPath);
-  const currentKind = useApp((s) => s.currentKind);
-  const currentContent = useApp((s) => s.currentContent);
+  // Selectores de campos sueltos (no de la pestaña entera) para no re-renderizar
+  // el área de contenido con cada tecla del editor, que sólo toca el borrador.
+  const tabId = useApp((s) => selectActiveTab(s)?.id ?? null);
+  const currentPath = useApp((s) => selectActiveTab(s)?.path ?? null);
+  const currentKind = useApp((s) => selectActiveTab(s)?.kind ?? 'md');
+  const currentContent = useApp((s) => selectActiveTab(s)?.content ?? null);
+  const currentError = useApp((s) => selectActiveTab(s)?.error ?? null);
+  const forceEditOnce = useApp((s) => selectActiveTab(s)?.forceEditOnce ?? false);
   const rawMode = useApp((s) => s.rawMode);
-  const forceEditOnce = useApp((s) => s.forceEditOnce);
   const ensureContent = useApp((s) => s.ensureContent);
   const tocOpen = useUi((s) => s.tocOpen);
 
@@ -25,6 +29,12 @@ export default function ReaderContent() {
   const contentRef = useRef<HTMLDivElement>(null);
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Posición de lectura en vivo. Va en un ref y no en el store para no escribir
+  // a cada píxel, y se toma del evento de scroll y no del DOM al salir: cuando
+  // React desmonta el documento de la pestaña que dejamos, el contenedor se
+  // queda sin altura y el navegador ya clampeó scrollTop a 0.
+  const scrollTopRef = useRef(0);
+  const restoredFor = useRef<string | null>(null);
 
   const isTxt = currentKind === 'txt';
   const editing = rawMode || isTxt || forceEditOnce;
@@ -54,12 +64,31 @@ export default function ReaderContent() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Al salir de una pestaña le dejamos anotada su posición de lectura, y al
+  // volver la reponemos una sola vez (MarkdownView arranca el documento en 0 al
+  // montar; este efecto es del padre, así que corre después y gana).
+  useEffect(() => {
+    const id = tabId;
+    if (!id) return;
+    return () => useApp.getState().setTabScroll(id, scrollTopRef.current);
+  }, [tabId]);
+
+  useEffect(() => {
+    if (!tabId || currentContent == null || restoredFor.current === tabId) return;
+    restoredFor.current = tabId;
+    const top = useApp.getState().tabs.find((t) => t.id === tabId)?.scrollTop ?? 0;
+    if (top && scrollRef.current) scrollRef.current.scrollTop = top;
+  }, [tabId, currentContent]);
+
   // Scrollspy: resalta el heading visible en la TOC.
   const onScroll = useCallback(() => {
     const wrap = scrollRef.current;
-    const root = contentRef.current;
-    if (!wrap || !root) return;
+    if (!wrap) return;
+    // La posición se anota siempre, aunque no haya TOC que resaltar (editor, mock).
     const top = wrap.scrollTop;
+    scrollTopRef.current = top;
+    const root = contentRef.current;
+    if (!root) return;
     let active: string | null = null;
     root.querySelectorAll<HTMLElement>('h1, h2, h3, h4').forEach((h) => {
       if (h.offsetTop - 90 <= top) active = h.id;
@@ -77,17 +106,32 @@ export default function ReaderContent() {
   let centered = true;
   let showToc = false;
 
+  // Todo lo que renderiza el documento va con key={tabId}: al cambiar de pestaña
+  // queremos un montaje nuevo, no el mismo componente con otras props. Sin eso el
+  // editor sembraría el archivo encima del borrador sin guardar de la pestaña que
+  // entra, y dos pestañas con contenido idéntico dejarían la TOC vieja.
   if (!currentPath) {
     main = <EmptyState />;
+  } else if (currentError && currentContent == null) {
+    // Suele ser un archivo movido o borrado por fuera (o una pestaña que la
+    // sesión restauró y ya no existe): mejor decirlo que quedar en blanco.
+    main = (
+      <Box sx={{ p: 4, color: 'error.main', fontSize: 14 }}>
+        No se pudo abrir <strong>{currentPath}</strong>: {currentError}
+      </Box>
+    );
   } else if (currentKind === 'html' && !editing) {
-    main = <MockFrame path={currentPath} />;
+    main = <MockFrame key={tabId} path={currentPath} />;
     centered = false;
   } else if (editing) {
     const cozy = (isTxt || forceEditOnce) && currentKind !== 'html';
-    main = currentContent != null ? <RawEditor initial={currentContent} cozy={cozy} /> : null;
+    main = currentContent != null ? <RawEditor key={tabId} initial={currentContent} cozy={cozy} /> : null;
   } else {
     // Markdown formateado
-    main = currentContent != null ? <MarkdownView content={currentContent} onHeadings={setHeadings} contentRef={contentRef} /> : null;
+    main =
+      currentContent != null ? (
+        <MarkdownView key={tabId} content={currentContent} onHeadings={setHeadings} contentRef={contentRef} />
+      ) : null;
     showToc = tocOpen && headings.length >= 2;
   }
 
